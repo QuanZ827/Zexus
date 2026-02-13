@@ -1,0 +1,290 @@
+<Window x:Class="Zexus.Views.ChatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Zexus"
+        Width="960" Height="750"
+        MinWidth="480" MinHeight="500"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="CanResizeWithGrip"
+        Topmost="False">
+
+    <Window.Resources>
+        <!-- Header icon buttons: subtle, monochrome -->
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9ca3af"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#2a2a2e"/>
+                                <Setter Property="Foreground" Value="#e5e7eb"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Close button: red on hover -->
+        <Style x:Key="CloseButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9ca3af"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#dc2626"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Input text box: clean, minimal border -->
+        <Style x:Key="InputTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="#1e1e22"/>
+            <Setter Property="Foreground" Value="#e5e7eb"/>
+            <Setter Property="BorderBrush" Value="#3a3a40"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontFamily" Value="Segoe UI, Segoe UI Emoji"/>
+            <Setter Property="CaretBrush" Value="#e5e7eb"/>
+            <Setter Property="SelectionBrush" Value="#6366f1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Send button: accent gradient -->
+        <Style x:Key="SendButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#6366f1"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#818cf8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#3a3a40"/>
+                                <Setter Property="Foreground" Value="#6b7280"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom vertical scrollbar: thin, semi-transparent, theme-matched -->
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="MinWidth" Value="6"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate><Border Background="Transparent"/></ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="#3a3a44" CornerRadius="3" Margin="1,0"
+                                                        Opacity="0.6"/>
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate><Border Background="Transparent"/></ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="6"/>
+                    <Setter Property="MinHeight" Value="6"/>
+                    <Setter Property="Width" Value="Auto"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <!-- Main container: dark neutral with subtle border -->
+    <Border Background="#18181b" CornerRadius="14" BorderBrush="#2a2a2e" BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.4" Color="Black"/>
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title Bar: clean, minimal -->
+            <Border Grid.Row="0" Background="#18181b" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Margin="16,0,8,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="28" Height="28" CornerRadius="7" Background="#6366f1" Margin="0,0,10,0">
+                            <TextBlock Text="AI" FontSize="11" FontWeight="Bold" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Zexus" FontSize="15" FontWeight="SemiBold" Foreground="#f4f4f5" VerticalAlignment="Center"/>
+                        <TextBlock Text="v2.1.0" FontSize="10" Foreground="#52525b" VerticalAlignment="Center" Margin="8,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button x:Name="NewChatBtn" Content="New" Click="OnNewChat" Style="{StaticResource HeaderButtonStyle}" Margin="2,0"/>
+                        <Button x:Name="PinBtn" Content="Pin" Click="OnTogglePin" Style="{StaticResource HeaderButtonStyle}" Margin="2,0"/>
+                        <Button x:Name="ExportLogBtn" Content="📋" Click="OnExportLog" Style="{StaticResource HeaderButtonStyle}" Margin="2,0" ToolTip="Export conversation log"/>
+                        <Button x:Name="SettingsBtn" Content="⚙" Click="OnSettings" Style="{StaticResource HeaderButtonStyle}" Margin="2,0"/>
+                        <Button Content="✕" Click="OnClose" Style="{StaticResource CloseButtonStyle}" Margin="2,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Separator + Document Context -->
+            <Border Grid.Row="1" Height="1" Background="#27272a"/>
+            <Border Grid.Row="1" Background="#1e1e22" Padding="16,7" Margin="0,1,0,0">
+                <TextBlock x:Name="DocumentLabel" Text="No document loaded" Foreground="#71717a" FontSize="12"
+                           FontFamily="Segoe UI, Segoe UI Emoji"/>
+            </Border>
+
+            <!-- ═══ Split-Screen Content Area ═══ -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="360"/>
+                    <ColumnDefinition x:Name="SplitterColumn" Width="Auto"/>
+                    <ColumnDefinition x:Name="WorkspaceColumnDef" Width="0"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- LEFT: Chat Column -->
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Chat Messages Area -->
+                    <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                                  Background="#18181b" Padding="14,8,14,8">
+                        <StackPanel x:Name="ChatContainer">
+                            <!-- Welcome Message -->
+                            <Border CornerRadius="12" Padding="20,16" Margin="24,8,24,12" HorizontalAlignment="Center">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#1e1e22" Offset="0"/>
+                                        <GradientStop Color="#23232a" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="Welcome to Zexus" FontSize="15" FontWeight="SemiBold"
+                                               Foreground="#e5e7eb" TextAlignment="Center" Margin="0,0,0,6"
+                                               FontFamily="Segoe UI, Segoe UI Emoji"/>
+                                    <TextBlock Text="Ask me anything about your Revit model."
+                                               FontSize="13" TextWrapping="Wrap" Foreground="#71717a" TextAlignment="Center"
+                                               FontFamily="Segoe UI, Segoe UI Emoji"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Status Bar -->
+                    <Border x:Name="StatusBar" Grid.Row="1" Background="#1e1e22" Padding="16,6" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="6" Height="6" CornerRadius="3" Background="#a78bfa" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="StatusText" Text="Processing..." Foreground="#71717a" FontSize="12"
+                                       FontFamily="Segoe UI, Segoe UI Emoji"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- SPLITTER -->
+                <GridSplitter x:Name="WorkspaceSplitter" Grid.Column="1" Width="1"
+                              Background="#27272a" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                              Visibility="Collapsed"/>
+
+                <!-- RIGHT: Workspace Panel -->
+                <Border x:Name="WorkspacePanel" Grid.Column="2" Background="#0f0f14"
+                        Visibility="Collapsed" BorderBrush="#1e1e28" BorderThickness="1,0,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,8">
+                        <StackPanel x:Name="WorkspaceContainer"/>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <!-- Input Area -->
+            <Border Grid.Row="3" Background="#1e1e22" CornerRadius="0,0,14,14" Padding="12,10,12,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="MessageInput" Grid.Column="0"
+                             AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="100"
+                             VerticalScrollBarVisibility="Auto"
+                             KeyDown="OnInputKeyDown"
+                             Style="{StaticResource InputTextBoxStyle}"/>
+                    <Button x:Name="SendBtn" Grid.Column="1" Content="↑"
+                            Click="OnSend" FontWeight="Bold"
+                            Style="{StaticResource SendButtonStyle}"
+                            Margin="8,0,0,0"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

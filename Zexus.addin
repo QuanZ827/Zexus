@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>Zexus</Name>
+    <Assembly>Zexus\Zexus.dll</Assembly>
+    <FullClassName>Zexus.App</FullClassName>
+    <ClientId>B2C3D4E5-F6A7-8901-BCDE-F12345678901</ClientId>
+    <VendorId>ZhequanZhang</VendorId>
+    <VendorDescription>Zhequan Zhang</VendorDescription>
+  </AddIn>
+</RevitAddIns>

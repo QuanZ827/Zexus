@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Zexus – WiX v4 MSI installer (per-user, NO admin required)
+  Supports Revit 2023-2026
+
+  Target: %APPDATA%\Autodesk\Revit\Addins\{year}\Zexus\
+  This is the user-level Addins folder — no elevation needed.
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="Zexus for Revit"
+           Manufacturer="Zhequan Zhang"
+           Version="2.1.0"
+           UpgradeCode="B2C3D4E5-F6A7-8901-BCDE-F12345678902"
+           Scope="perUser"
+           InstallerVersion="500">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Zexus is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Directory structure: %APPDATA%\Autodesk\Revit\Addins\{year} -->
+    <StandardDirectory Id="AppDataFolder">
+      <Directory Id="AutodeskDir" Name="Autodesk">
+        <Directory Id="RevitDir" Name="Revit">
+          <Directory Id="AddinsDir" Name="Addins">
+            <Directory Id="Addins2023" Name="2023">
+              <Directory Id="PluginDir2023" Name="Zexus" />
+            </Directory>
+            <Directory Id="Addins2024" Name="2024">
+              <Directory Id="PluginDir2024" Name="Zexus" />
+            </Directory>
+            <Directory Id="Addins2025" Name="2025">
+              <Directory Id="PluginDir2025" Name="Zexus" />
+            </Directory>
+            <Directory Id="Addins2026" Name="2026">
+              <Directory Id="PluginDir2026" Name="Zexus" />
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Feature: install all versions (user can have multiple Revit versions) -->
+    <Feature Id="MainFeature" Title="Zexus" Level="1">
+      <ComponentGroupRef Id="Revit2023_Addin" />
+      <ComponentGroupRef Id="Revit2023_DLLs" />
+      <ComponentGroupRef Id="Revit2024_Addin" />
+      <ComponentGroupRef Id="Revit2024_DLLs" />
+      <ComponentGroupRef Id="Revit2025_Addin" />
+      <ComponentGroupRef Id="Revit2025_DLLs" />
+      <ComponentGroupRef Id="Revit2026_Addin" />
+      <ComponentGroupRef Id="Revit2026_DLLs" />
+      <ComponentGroupRef Id="TeamConfig2023" />
+      <ComponentGroupRef Id="TeamConfig2024" />
+      <ComponentGroupRef Id="TeamConfig2025" />
+      <ComponentGroupRef Id="TeamConfig2026" />
+    </Feature>
+
+  </Package>
+
+  <!-- ===== Revit 2023 (net48) ===== -->
+  <Fragment>
+    <ComponentGroup Id="Revit2023_Addin" Directory="Addins2023">
+      <Component Id="Addin2023" Guid="11111111-1111-1111-1111-111111111123">
+        <File Id="Addin2023_manifest" Source="..\Zexus.addin" Name="Zexus.addin" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Revit2023_DLLs" Directory="PluginDir2023">
+      <Component Id="DLL2023_Main" Guid="22222222-2222-2222-2222-222222222123">
+        <File Id="DLL2023_Zexus" Source="..\bin\Release\net48\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2023_TextJson" Source="..\bin\Release\net48\System.Text.Json.dll" />
+        <File Id="DLL2023_BclAsync" Source="..\bin\Release\net48\Microsoft.Bcl.AsyncInterfaces.dll" />
+        <File Id="DLL2023_Memory" Source="..\bin\Release\net48\System.Memory.dll" />
+        <File Id="DLL2023_Buffers" Source="..\bin\Release\net48\System.Buffers.dll" />
+        <File Id="DLL2023_Unsafe" Source="..\bin\Release\net48\System.Runtime.CompilerServices.Unsafe.dll" />
+        <File Id="DLL2023_TaskExt" Source="..\bin\Release\net48\System.Threading.Tasks.Extensions.dll" />
+        <File Id="DLL2023_NumVec" Source="..\bin\Release\net48\System.Numerics.Vectors.dll" />
+        <File Id="DLL2023_ValTuple" Source="..\bin\Release\net48\System.ValueTuple.dll" />
+        <File Id="DLL2023_TextEnc" Source="..\bin\Release\net48\System.Text.Encodings.Web.dll" />
+        <!-- Roslyn (ExecuteCode tool) -->
+        <File Id="DLL2023_CodeAnalysis" Source="..\bin\Release\net48\Microsoft.CodeAnalysis.dll" />
+        <File Id="DLL2023_CodeAnalysisCSharp" Source="..\bin\Release\net48\Microsoft.CodeAnalysis.CSharp.dll" />
+        <File Id="DLL2023_Immutable" Source="..\bin\Release\net48\System.Collections.Immutable.dll" />
+        <File Id="DLL2023_ReflMeta" Source="..\bin\Release\net48\System.Reflection.Metadata.dll" />
+        <File Id="DLL2023_EncCodePages" Source="..\bin\Release\net48\System.Text.Encoding.CodePages.dll" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ===== Revit 2024 (net48) ===== -->
+  <Fragment>
+    <ComponentGroup Id="Revit2024_Addin" Directory="Addins2024">
+      <Component Id="Addin2024" Guid="11111111-1111-1111-1111-111111111124">
+        <File Id="Addin2024_manifest" Source="..\Zexus.addin" Name="Zexus.addin" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Revit2024_DLLs" Directory="PluginDir2024">
+      <Component Id="DLL2024_Main" Guid="22222222-2222-2222-2222-222222222124">
+        <File Id="DLL2024_Zexus" Source="..\bin\Release\net48\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2024_TextJson" Source="..\bin\Release\net48\System.Text.Json.dll" />
+        <File Id="DLL2024_BclAsync" Source="..\bin\Release\net48\Microsoft.Bcl.AsyncInterfaces.dll" />
+        <File Id="DLL2024_Memory" Source="..\bin\Release\net48\System.Memory.dll" />
+        <File Id="DLL2024_Buffers" Source="..\bin\Release\net48\System.Buffers.dll" />
+        <File Id="DLL2024_Unsafe" Source="..\bin\Release\net48\System.Runtime.CompilerServices.Unsafe.dll" />
+        <File Id="DLL2024_TaskExt" Source="..\bin\Release\net48\System.Threading.Tasks.Extensions.dll" />
+        <File Id="DLL2024_NumVec" Source="..\bin\Release\net48\System.Numerics.Vectors.dll" />
+        <File Id="DLL2024_ValTuple" Source="..\bin\Release\net48\System.ValueTuple.dll" />
+        <File Id="DLL2024_TextEnc" Source="..\bin\Release\net48\System.Text.Encodings.Web.dll" />
+        <!-- Roslyn (ExecuteCode tool) -->
+        <File Id="DLL2024_CodeAnalysis" Source="..\bin\Release\net48\Microsoft.CodeAnalysis.dll" />
+        <File Id="DLL2024_CodeAnalysisCSharp" Source="..\bin\Release\net48\Microsoft.CodeAnalysis.CSharp.dll" />
+        <File Id="DLL2024_Immutable" Source="..\bin\Release\net48\System.Collections.Immutable.dll" />
+        <File Id="DLL2024_ReflMeta" Source="..\bin\Release\net48\System.Reflection.Metadata.dll" />
+        <File Id="DLL2024_EncCodePages" Source="..\bin\Release\net48\System.Text.Encoding.CodePages.dll" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ===== Revit 2025 (net8) ===== -->
+  <Fragment>
+    <ComponentGroup Id="Revit2025_Addin" Directory="Addins2025">
+      <Component Id="Addin2025" Guid="11111111-1111-1111-1111-111111111125">
+        <File Id="Addin2025_manifest" Source="..\Zexus.addin" Name="Zexus.addin" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Revit2025_DLLs" Directory="PluginDir2025">
+      <Component Id="DLL2025_Main" Guid="22222222-2222-2222-2222-222222222125">
+        <File Id="DLL2025_Zexus" Source="..\bin\Release\net8.0-windows\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2025_Deps" Source="..\bin\Release\net8.0-windows\Zexus.deps.json" />
+        <File Id="DLL2025_Runtime" Source="..\bin\Release\net8.0-windows\Zexus.runtimeconfig.json" />
+        <!-- Roslyn (ExecuteCode tool) -->
+        <File Id="DLL2025_CodeAnalysis" Source="..\bin\Release\net8.0-windows\Microsoft.CodeAnalysis.dll" />
+        <File Id="DLL2025_CodeAnalysisCSharp" Source="..\bin\Release\net8.0-windows\Microsoft.CodeAnalysis.CSharp.dll" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ===== Revit 2026 (net8) ===== -->
+  <Fragment>
+    <ComponentGroup Id="Revit2026_Addin" Directory="Addins2026">
+      <Component Id="Addin2026" Guid="11111111-1111-1111-1111-111111111126">
+        <File Id="Addin2026_manifest" Source="..\Zexus.addin" Name="Zexus.addin" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="Revit2026_DLLs" Directory="PluginDir2026">
+      <Component Id="DLL2026_Main" Guid="22222222-2222-2222-2222-222222222126">
+        <File Id="DLL2026_Zexus" Source="..\bin\Release\net8.0-windows\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2026_Deps" Source="..\bin\Release\net8.0-windows\Zexus.deps.json" />
+        <File Id="DLL2026_Runtime" Source="..\bin\Release\net8.0-windows\Zexus.runtimeconfig.json" />
+        <!-- Roslyn (ExecuteCode tool) -->
+        <File Id="DLL2026_CodeAnalysis" Source="..\bin\Release\net8.0-windows\Microsoft.CodeAnalysis.dll" />
+        <File Id="DLL2026_CodeAnalysisCSharp" Source="..\bin\Release\net8.0-windows\Microsoft.CodeAnalysis.CSharp.dll" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ===== team_config.json ===== -->
+  <Fragment>
+    <ComponentGroup Id="TeamConfig2023" Directory="PluginDir2023">
+      <Component Id="TeamCfg2023" Guid="33333333-3333-3333-3333-333333333123" NeverOverwrite="yes">
+        <File Id="TeamCfg2023_file" Source="team_config.json" Name="team_config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="TeamConfig2024" Directory="PluginDir2024">
+      <Component Id="TeamCfg2024" Guid="33333333-3333-3333-3333-333333333124" NeverOverwrite="yes">
+        <File Id="TeamCfg2024_file" Source="team_config.json" Name="team_config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="TeamConfig2025" Directory="PluginDir2025">
+      <Component Id="TeamCfg2025" Guid="33333333-3333-3333-3333-333333333125" NeverOverwrite="yes">
+        <File Id="TeamCfg2025_file" Source="team_config.json" Name="team_config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="TeamConfig2026" Directory="PluginDir2026">
+      <Component Id="TeamCfg2026" Guid="33333333-3333-3333-3333-333333333126" NeverOverwrite="yes">
+        <File Id="TeamCfg2026_file" Source="team_config.json" Name="team_config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
