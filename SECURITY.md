@@ -4,8 +4,7 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 2.1.x   | :white_check_mark: |
-| < 2.1   | :x:                |
+| 0.1.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
@@ -36,9 +35,10 @@ Please include:
 - The `.gitignore` excludes all configuration files containing secrets
 
 ### Data Flow
-- Zexus sends Revit model metadata to the Anthropic API for AI processing
+- Zexus sends Revit model metadata to the configured LLM provider (Anthropic, OpenAI, or Google) for AI processing
 - No data is stored on external servers by Zexus itself
 - Local usage logs contain no API keys or authentication tokens
+- Provider selection is user-controlled; data only flows to the provider the user explicitly configures
 
 ### Code Execution
 - The `ExecuteCode` tool compiles and runs C# code inside the Revit process

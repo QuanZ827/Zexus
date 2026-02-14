@@ -2,7 +2,7 @@
 
 **An open-source Revit add-in that lets you query, analyze, and automate BIM workflows using natural language.**
 
-Zexus integrates Claude AI directly into Revit, giving BIM engineers an intelligent assistant that understands your model, executes Revit API operations, and chains multiple tools together autonomously — all through a chat interface.
+Zexus integrates LLM-powered AI directly into Revit, giving BIM engineers an intelligent assistant that understands your model, executes Revit API operations, and chains multiple tools together autonomously — all through a chat interface.
 
 ---
 
@@ -23,29 +23,40 @@ Zexus:        Natural language  →  AI-composed tools  →  Change requirements
 
 - **Query your model** — Element counts, parameter values, warnings, spatial relationships
 - **Find and highlight elements** — Search by category, family, type, level, or parameter value, then select/isolate in view
-- **Modify parameters** — Single or batch edits with mandatory user confirmation
+- **Modify parameters** — Single edits with mandatory user confirmation
+- **Create and manage schedules** — Create schedules, add/remove/reorder columns, format widths/alignment/fonts, filter, sort
+- **Navigate views** — Open any floor plan, schedule, sheet, section, or 3D view by name
 - **Create project parameters** — Bind new parameters to categories via natural language
-- **Manage schedules** — Add/remove fields, filters, and sort/group definitions
 - **Print and export** — PDF print, DWG/DXF/IFC/NWC/image/CSV export
 - **Execute arbitrary C# code** — When predefined tools aren't enough, the AI writes and runs Revit API code on the fly via Roslyn
+
+## Multi-LLM Support
+
+| Provider | Models | Status |
+|----------|--------|--------|
+| **Anthropic** | Claude Sonnet, Opus, Haiku | Fully supported |
+| **OpenAI** | GPT-4o, GPT-4o-mini | Fully supported |
+| **Google** | Gemini 2.5 Pro, Flash | Fully supported |
+
+Switch providers at runtime — no restart needed. Bring your own API key.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              AI Agent (Claude)                        │
-│   Understand intent → Select tools → Compose → Report│
-└─────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────┐
-│            17 Atomic Tools                           │
-│  Query(5) | Action(3) | Schedule(4) | Output(4) | Code(1) │
-└─────────────────────────────────────────────────────┘
-                         ↓
-┌─────────────────────────────────────────────────────┐
-│              Revit API                               │
-│     FilteredElementCollector, Transaction, Export...  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    AI Agent (LLM)                             │
+│   Understand intent → Select tools → Compose → Report        │
+└──────────────────────────────────────────────────────────────┘
+                              ↓
+┌──────────────────────────────────────────────────────────────┐
+│                   20 Atomic Tools                             │
+│  Query(5) | Action(4) | Schedule(6) | Output(4) | Code(1)    │
+└──────────────────────────────────────────────────────────────┘
+                              ↓
+┌──────────────────────────────────────────────────────────────┐
+│                      Revit API                                │
+│  FilteredElementCollector, Transaction, Export, UIDocument...  │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Design principles:**
@@ -53,6 +64,9 @@ Zexus:        Natural language  →  AI-composed tools  →  Change requirements
 - **Composable** — Tools chain freely to solve complex tasks
 - **Safe** — All model modifications require explicit user confirmation
 - **Extensible** — Add new tools by implementing a single interface
+- **Version-aware** — Auto-detects Revit version, injects correct API guidance into the LLM prompt
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design document.
 
 ## Supported Revit Versions
 
@@ -69,11 +83,13 @@ Single codebase, dual target — built from one `csproj` with conditional compil
 
 ### Install from Release
 
-1. Download the latest installer from [Releases](https://github.com/QuanZ827/Zexus/releases)
-2. Run the installer — it auto-detects your Revit versions
+1. Download the latest `Zexus_Setup_v*.msi` from [Releases](https://github.com/QuanZ827/Zexus/releases)
+2. Run the installer — no admin required, installs per-user
 3. Open Revit → find the **Zexus** tab → click **Zexus Agent**
-4. Enter your [Anthropic API key](https://console.anthropic.com/) in Settings
+4. Enter your API key in Settings (choose Anthropic, OpenAI, or Google)
 5. Start chatting
+
+> Windows SmartScreen may show a warning — click "More info" → "Run anyway".
 
 ### Build from Source
 
@@ -98,18 +114,21 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup instructions.
 | `GetSelection` | Read user's current Revit selection |
 | `GetWarnings` | Model warnings grouped by type and severity |
 
-### Action Tools (3)
+### Action Tools (4)
 | Tool | Purpose |
 |------|---------|
 | `SelectElements` | Highlight + zoom to elements in Revit |
 | `IsolateElements` | Temporarily isolate/hide/reset visibility in view |
 | `SetElementParameter` | Modify a parameter value (requires confirmation) |
+| `ActivateView` | Open/switch to any view, schedule, sheet, 3D, section |
 
-### Parameter & Schedule Tools (4)
+### Schedule Tools (6)
 | Tool | Purpose |
 |------|---------|
+| `CreateSchedule` | Create a new schedule for any Revit category |
+| `AddScheduleField` | Add/remove/reorder/list schedule columns |
+| `FormatScheduleField` | Column width, alignment, header text, bold/italic |
 | `CreateProjectParameter` | Create and bind a new project parameter |
-| `AddScheduleField` | Add/remove/list schedule columns |
 | `ModifyScheduleFilter` | Add/remove/list/clear schedule filters |
 | `ModifyScheduleSort` | Add/remove/list/clear schedule sort/group |
 
@@ -126,14 +145,34 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup instructions.
 |------|---------|
 | `ExecuteCode` | Dynamic C# execution via Roslyn — handles anything the Revit API supports |
 
+See [docs/TOOLS.md](docs/TOOLS.md) for full parameter reference and example prompts.
+
 ## Safety Model
 
-Zexus enforces strict safety rules for model modifications:
+### Write Operations
 
-1. **Confirmation required** — All write operations show what will change and wait for user approval
+All model modifications require explicit user confirmation:
+
+1. **Confirmation required** — Write operations show what will change and wait for user approval
 2. **Type parameter warnings** — Changing a Type parameter affects ALL instances of that type
 3. **Batch operation preview** — For >10 elements, a summary is shown before execution
 4. **No auto-corrections** — The AI always shows proposed changes before applying them
+
+### ⚠️ ExecuteCode Safety
+
+The `ExecuteCode` tool compiles and runs arbitrary C# code inside the Revit process via Roslyn. This is the platform's most powerful capability — and its most significant risk surface.
+
+**What you should know:**
+- ExecuteCode is **always enabled** when Zexus is loaded. There is no separate toggle.
+- Code runs with **full Revit API access** — it can read, modify, and delete elements.
+- The AI agent is instructed to **request confirmation before write operations**, but this is an LLM behavioral constraint, not a hard technical barrier.
+- All code execution is logged locally for audit purposes.
+
+**Recommendations:**
+- **Always save your project** before using Zexus for automation tasks
+- **Review the AI's proposed changes** before confirming write operations
+- **Use Revit's Undo** (`Ctrl+Z`) immediately if an operation produces unexpected results
+- For critical production models, test on a copy first
 
 ## Extending Zexus
 
@@ -151,7 +190,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 - [ ] Multi-model / linked model operations
 - [ ] Visual diff for before/after parameter changes
 - [ ] Community tool gallery
-- [ ] Support for additional AI providers
+- [ ] Usage analytics dashboard
 
 ## Contributing
 

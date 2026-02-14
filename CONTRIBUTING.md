@@ -67,7 +67,7 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for detailed setup instructions
 Zexus/
 ├── App.cs                  # Revit Add-in entry point
 ├── Services/               # Core services (AgentService, AnthropicClient, etc.)
-├── Tools/                  # All 17 agent tools (IAgentTool implementations)
+├── Tools/                  # 20 registered + 11 reserve agent tools (IAgentTool)
 ├── Models/                 # Data models (ChatMessage, ToolResult, etc.)
 ├── Views/                  # WPF UI (ChatWindow)
 ├── Revit/                  # Revit API thread safety (ExternalEventHandler)
