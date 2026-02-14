@@ -16,11 +16,12 @@ namespace Zexus.Tools
         public string Name => "AddScheduleField";
 
         public string Description =>
-            "Add, remove, or list fields (columns) in a Schedule view. " +
-            "WRITE OPERATION when adding/removing fields. " +
+            "Add, remove, reorder, or list fields (columns) in a Schedule view. " +
+            "WRITE OPERATION when adding/removing/reordering fields. " +
             "Use mode 'list' to see available fields before adding. " +
             "Use mode 'add' to add a parameter as a column. " +
-            "Use mode 'remove' to remove a column by name.";
+            "Use mode 'remove' to remove a column by name. " +
+            "Use mode 'reorder' to move a column to a new position.";
 
         public ToolSchema GetInputSchema()
         {
@@ -37,8 +38,8 @@ namespace Zexus.Tools
                     ["mode"] = new PropertySchema
                     {
                         Type = "string",
-                        Description = "Operation mode: 'list' to show current and available fields, 'add' to add a field, 'remove' to remove a field.",
-                        Enum = new List<string> { "list", "add", "remove" }
+                        Description = "Operation mode: 'list' to show current and available fields, 'add' to add a field, 'remove' to remove a field, 'reorder' to move a field to a new position.",
+                        Enum = new List<string> { "list", "add", "remove", "reorder" }
                     },
                     ["field_name"] = new PropertySchema
                     {
@@ -55,6 +56,11 @@ namespace Zexus.Tools
                         Type = "string",
                         Description = "Set to 'true' to add the field but keep it hidden (useful for filtering/sorting). Default: false.",
                         Enum = new List<string> { "true", "false" }
+                    },
+                    ["position"] = new PropertySchema
+                    {
+                        Type = "number",
+                        Description = "Target position index (0-based) for 'reorder' mode. The field will be moved to this position."
                     }
                 },
                 Required = new List<string> { "schedule_name", "mode" }
@@ -98,8 +104,19 @@ namespace Zexus.Tools
                         if (string.IsNullOrEmpty(fieldName))
                             return ToolResult.Fail("field_name is required for 'remove' mode");
                         return RemoveField(doc, schedule, definition, fieldName);
+                    case "reorder":
+                        if (string.IsNullOrEmpty(fieldName))
+                            return ToolResult.Fail("field_name is required for 'reorder' mode");
+                        int position = -1;
+                        if (parameters.TryGetValue("position", out var posObj) && posObj != null)
+                        {
+                            try { position = Convert.ToInt32(posObj); } catch { }
+                        }
+                        if (position < 0)
+                            return ToolResult.Fail("position (0-based index) is required for 'reorder' mode.");
+                        return ReorderField(doc, schedule, definition, fieldName, position);
                     default:
-                        return ToolResult.Fail($"Unknown mode: '{mode}'. Use 'list', 'add', or 'remove'.");
+                        return ToolResult.Fail($"Unknown mode: '{mode}'. Use 'list', 'add', 'remove', or 'reorder'.");
                 }
             }
             catch (Exception ex)
@@ -274,6 +291,65 @@ namespace Zexus.Tools
                     ["schedule_name"] = schedule.Name,
                     ["removed_field"] = fieldName,
                     ["remaining_fields"] = definition.GetFieldCount()
+                });
+        }
+
+        private ToolResult ReorderField(Document doc, ViewSchedule schedule, ScheduleDefinition definition,
+            string fieldName, int targetPosition)
+        {
+            int fieldCount = definition.GetFieldCount();
+            int sourceIndex = -1;
+
+            for (int i = 0; i < fieldCount; i++)
+            {
+                var field = definition.GetField(i);
+                if (string.Equals(field.GetName(), fieldName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(field.ColumnHeading, fieldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    sourceIndex = i;
+                    break;
+                }
+            }
+
+            if (sourceIndex < 0)
+                return ToolResult.Fail($"Field '{fieldName}' not found in schedule '{schedule.Name}'.");
+
+            if (targetPosition >= fieldCount)
+                targetPosition = fieldCount - 1;
+
+            if (sourceIndex == targetPosition)
+            {
+                return ToolResult.WithWarning(
+                    $"Field '{fieldName}' is already at position {targetPosition}.",
+                    new Dictionary<string, object>
+                    {
+                        ["field_name"] = fieldName,
+                        ["position"] = targetPosition
+                    });
+            }
+
+            using (var trans = new Transaction(doc, $"AI Agent: Reorder field '{fieldName}' in schedule"))
+            {
+                trans.Start();
+
+                var fieldOrder = new List<ScheduleFieldId>(definition.GetFieldOrder());
+                var fieldId = fieldOrder[sourceIndex];
+                fieldOrder.RemoveAt(sourceIndex);
+                fieldOrder.Insert(targetPosition, fieldId);
+                definition.SetFieldOrder(fieldOrder);
+
+                trans.Commit();
+            }
+
+            return ToolResult.Ok(
+                $"Moved field '{fieldName}' from position {sourceIndex} to {targetPosition} in schedule '{schedule.Name}'.",
+                new Dictionary<string, object>
+                {
+                    ["success"] = true,
+                    ["schedule_name"] = schedule.Name,
+                    ["field_name"] = fieldName,
+                    ["from_position"] = sourceIndex,
+                    ["to_position"] = targetPosition
                 });
         }
     }

@@ -82,7 +82,9 @@ namespace Zexus.Tools
 
                 // === Parameter & Schedule Tools (atomic operations) ===
                 new CreateProjectParameterTool(), // Create project parameter + bind to categories
-                new AddScheduleFieldTool(),       // Add/remove/list fields in a schedule
+                new CreateScheduleTool(),         // Create a new schedule for a category
+                new AddScheduleFieldTool(),       // Add/remove/reorder/list fields in a schedule
+                new FormatScheduleFieldTool(),    // Column width, alignment, bold/italic, header text
                 new ModifyScheduleFilterTool(),   // Add/remove/list/clear schedule filters
                 new ModifyScheduleSortTool(),     // Add/remove/list/clear schedule sort/group
 

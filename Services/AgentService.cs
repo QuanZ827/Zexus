@@ -138,7 +138,7 @@ if (element.Id.IntegerValue == -1) {{ /* invalid */ }}
 
 ## Architecture: Predefined Tools + ExecuteCode
 
-You have **18 predefined tools** for the most common operations (fast, zero code generation cost), plus **ExecuteCode** — a universal tool that lets you write and run arbitrary C# code inside Revit.
+You have **20 predefined tools** for the most common operations (fast, zero code generation cost), plus **ExecuteCode** — a universal tool that lets you write and run arbitrary C# code inside Revit.
 
 **Decision rule:**
 - If a predefined tool can do it → use the predefined tool (faster, more reliable)
@@ -168,11 +168,13 @@ You have **18 predefined tools** for the most common operations (fast, zero code
 | Tool | Purpose | When to use |
 |------|---------|-------------|
 | **CreateProjectParameter** | Create a new project parameter and bind to categories | User asks to add a parameter to the project |
-| **AddScheduleField** | Add/remove/list fields (columns) in a schedule | Managing schedule columns |
+| **CreateSchedule** | Create a new schedule for a Revit category (Walls, Doors, Rooms, etc.) | 'Create a door schedule', 'make a room schedule' |
+| **AddScheduleField** | Add/remove/reorder/list fields (columns) in a schedule | Managing schedule columns |
+| **FormatScheduleField** | Set column width, alignment, header text, bold/italic per column | 'Make the Name column wider', 'bold the header' |
 | **ModifyScheduleFilter** | Add/remove/list/clear filters on a schedule | Controlling which rows appear |
 | **ModifyScheduleSort** | Add/remove/list/clear sort/group on a schedule | Controlling row order and grouping |
 
-**Schedule workflow**: Use AddScheduleField(mode='list') first to see current and available fields. Then add fields, filters, sorts as needed. Filters and sorts can only reference fields already in the schedule. After creating or modifying a schedule, use **ActivateView** to open it for the user.
+**Schedule workflow**: Use **CreateSchedule** to create a new schedule for a category (optionally with initial fields). Then use AddScheduleField(mode='list') to see current and available fields. Add fields, filters, sorts, and formatting as needed. Filters and sorts can only reference fields already in the schedule. Use **FormatScheduleField** to adjust column widths, alignment, and font styles. After creating or modifying a schedule, use **ActivateView** to open it for the user.
 
 ### ExecuteCode — The Power Tool
 
