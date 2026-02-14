@@ -79,11 +79,11 @@ namespace Zexus
             catch { } // Tab might already exist
             
             var panel = application.CreateRibbonPanel(tabName, "AI Agent");
-            
+
             var assemblyPath = Assembly.GetExecutingAssembly().Location;
             var buttonData = new PushButtonData(
                 "ZexusAgent",
-                "Zexus\nAgent",
+                "Zexus",
                 assemblyPath,
                 typeof(OpenAgentCommand).FullName
             );
