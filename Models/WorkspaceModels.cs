@@ -11,13 +11,9 @@ namespace Zexus.Models
     public enum OutputRecordType
     {
         ScheduleCreated,
-        ViewActivated,
-        ScheduleModified,
-        FileExported,
-        FilePrinted,
-        ParameterSet,
         ParameterCreated,
-        QueryResult
+        FileExported,
+        FilePrinted
     }
 
     public class OutputRecord

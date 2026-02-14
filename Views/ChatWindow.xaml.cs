@@ -1266,6 +1266,10 @@ namespace Zexus.Views
 
         #region Output Preview Panel
 
+        /// <summary>
+        /// Only creates output records for NEW artifacts added to the model or exported files.
+        /// Edits, queries, and navigation are NOT tracked here — they belong in the thinking chain.
+        /// </summary>
         private OutputRecord MapToolResultToOutputRecord(string toolName, ToolResult result)
         {
             if (!result.Success) return null;
@@ -1273,6 +1277,7 @@ namespace Zexus.Views
 
             switch (toolName)
             {
+                // ── New view created ──
                 case "CreateSchedule":
                 {
                     long? viewId = null;
@@ -1295,51 +1300,25 @@ namespace Zexus.Views
                     };
                 }
 
-                case "ActivateView":
+                // ── New parameter created ──
+                case "CreateProjectParameter":
                 {
-                    long? viewId = null;
-                    if (data != null && data.TryGetValue("view_id", out var vid))
-                        viewId = ConvertToLong(vid);
-
-                    string viewName = data != null && data.TryGetValue("view_name", out var vn) ? vn?.ToString() : "View";
-                    string viewType = data != null && data.TryGetValue("view_type", out var vt) ? vt?.ToString() : "";
+                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
+                    string paramType = data != null && data.TryGetValue("parameter_type", out var pt) ? pt?.ToString() : "";
 
                     return new OutputRecord
                     {
-                        RecordType = OutputRecordType.ViewActivated,
-                        Title = viewName,
-                        Subtitle = $"Activated \u2022 {viewType}",
-                        IconGlyph = "\U0001F4D0",
-                        IconColor = ColAccent,
-                        ToolName = toolName,
-                        ViewId = viewId,
-                        Data = data
-                    };
-                }
-
-                case "AddScheduleField":
-                case "FormatScheduleField":
-                case "ModifyScheduleFilter":
-                case "ModifyScheduleSort":
-                {
-                    string schedName = data != null && data.TryGetValue("schedule_name", out var sn) ? sn?.ToString() : "Schedule";
-                    string action = toolName == "AddScheduleField" ? "Field added"
-                        : toolName == "FormatScheduleField" ? "Formatted"
-                        : toolName == "ModifyScheduleFilter" ? "Filter updated"
-                        : "Sort updated";
-
-                    return new OutputRecord
-                    {
-                        RecordType = OutputRecordType.ScheduleModified,
-                        Title = schedName,
-                        Subtitle = action,
-                        IconGlyph = "\U0001F4CA",
-                        IconColor = ColAccent,
+                        RecordType = OutputRecordType.ParameterCreated,
+                        Title = paramName,
+                        Subtitle = $"Created \u2022 {paramType}",
+                        IconGlyph = "\u270F",
+                        IconColor = ColWarning,
                         ToolName = toolName,
                         Data = data
                     };
                 }
 
+                // ── File exported ──
                 case "ExportDocument":
                 {
                     string format = data != null && data.TryGetValue("format", out var f) ? f?.ToString() : "File";
@@ -1348,7 +1327,6 @@ namespace Zexus.Views
                     int count = files?.Count ?? 0;
 
                     string firstFile = files != null && files.Count > 0 ? files[0] : null;
-                    // Build full path if file is just a name
                     if (firstFile != null && folder != null && !System.IO.Path.IsPathRooted(firstFile))
                         firstFile = System.IO.Path.Combine(folder, firstFile);
 
@@ -1367,6 +1345,7 @@ namespace Zexus.Views
                     };
                 }
 
+                // ── Sheets printed to PDF ──
                 case "PrintSheets":
                 {
                     var files = ExtractFileList(data, "output_files");
@@ -1386,72 +1365,7 @@ namespace Zexus.Views
                     };
                 }
 
-                case "SetElementParameter":
-                {
-                    // Skip preview mode
-                    if (data != null && data.TryGetValue("preview", out var prev) && Convert.ToBoolean(prev))
-                        return null;
-
-                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
-                    string newVal = data != null && data.TryGetValue("new_value", out var nv) ? nv?.ToString() : "";
-                    string elemName = data != null && data.TryGetValue("element_name", out var en) ? en?.ToString() : "";
-
-                    return new OutputRecord
-                    {
-                        RecordType = OutputRecordType.ParameterSet,
-                        Title = $"{paramName} \u2192 {newVal}",
-                        Subtitle = elemName,
-                        IconGlyph = "\u270F",
-                        IconColor = ColWarning,
-                        ToolName = toolName,
-                        Data = data
-                    };
-                }
-
-                case "CreateProjectParameter":
-                {
-                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
-                    string paramType = data != null && data.TryGetValue("parameter_type", out var pt) ? pt?.ToString() : "";
-
-                    return new OutputRecord
-                    {
-                        RecordType = OutputRecordType.ParameterCreated,
-                        Title = paramName,
-                        Subtitle = $"Created \u2022 {paramType}",
-                        IconGlyph = "\u270F",
-                        IconColor = ColWarning,
-                        ToolName = toolName,
-                        Data = data
-                    };
-                }
-
-                case "SearchElements":
-                case "GetModelOverview":
-                case "GetParameterValues":
-                case "GetSelection":
-                case "ListSheets":
-                case "ListViews":
-                case "GetWarnings":
-                case "GetViewsOnSheet":
-                {
-                    string summary = result.Message;
-                    if (summary != null && summary.Length > 60)
-                        summary = summary.Substring(0, 60) + "...";
-
-                    return new OutputRecord
-                    {
-                        RecordType = OutputRecordType.QueryResult,
-                        Title = toolName.StartsWith("Get") || toolName.StartsWith("List") || toolName.StartsWith("Search")
-                            ? toolName.Replace("Get", "").Replace("List", "").Replace("Search", "Find ")
-                            : toolName,
-                        Subtitle = summary ?? "Completed",
-                        IconGlyph = "\U0001F50D",
-                        IconColor = ColPrimary,
-                        ToolName = toolName,
-                        Data = data
-                    };
-                }
-
+                // Everything else (queries, edits, navigation) → no output record
                 default:
                     return null;
             }
