@@ -12,8 +12,20 @@ namespace Zexus.Models
     {
         ScheduleCreated,
         ParameterCreated,
+        ParameterSet,
         FileExported,
         FilePrinted
+    }
+
+    /// <summary>
+    /// One row inside a batch parameter change record.
+    /// </summary>
+    public class ParameterChangeEntry
+    {
+        public long ElementId { get; set; }
+        public string ElementName { get; set; }
+        public string OldValue { get; set; }
+        public string NewValue { get; set; }
     }
 
     public class OutputRecord
@@ -33,11 +45,16 @@ namespace Zexus.Models
         public List<string> FilePaths { get; set; }
         public string FolderPath { get; set; }
 
+        // ── Batch parameter changes (expandable) ──
+        public string ParameterName { get; set; }
+        public List<ParameterChangeEntry> ChangeEntries { get; set; }
+
         // ── Full result data ──
         public Dictionary<string, object> Data { get; set; }
 
         // ── Computed ──
         public bool IsClickable => ViewId.HasValue || FilePath != null || (FilePaths != null && FilePaths.Count > 0);
+        public bool IsExpandable => ChangeEntries != null && ChangeEntries.Count > 0;
     }
 
     public class ThinkingChainNode

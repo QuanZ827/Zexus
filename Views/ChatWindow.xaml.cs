@@ -33,6 +33,7 @@ namespace Zexus.Views
         // ─── Output Preview Panel ───
         private readonly List<OutputRecord> _outputRecords = new List<OutputRecord>();
         private StackPanel _outputCardsContainer;
+        private readonly HashSet<string> _expandedRecordIds = new HashSet<string>();
 
         // ─── Design Tokens (matching reference palette) ───
         static readonly Color ColBg         = Color.FromRgb(0x08, 0x08, 0x0e);   // #08080e  background
@@ -134,6 +135,7 @@ namespace Zexus.Views
                 CollapseWorkspace();
                 _workspaceState = null;
                 _outputRecords.Clear();
+                _expandedRecordIds.Clear();
                 CollapseOutputPanel();
             }
         }
@@ -766,11 +768,17 @@ namespace Zexus.Views
                 RebuildThinkingChain();
 
                 // ── Generate Output Record ──
+                bool hadRecordsBefore = _outputRecords.Count > 0;
                 var outputRecord = MapToolResultToOutputRecord(toolName, result);
                 if (outputRecord != null)
                 {
                     _outputRecords.Add(outputRecord);
                     ShowOutputPanel();
+                    RebuildOutputCards();
+                }
+                else if (_outputRecords.Count > 0 && hadRecordsBefore)
+                {
+                    // Aggregated into existing record (e.g. batch SetElementParameter)
                     RebuildOutputCards();
                 }
             }));
@@ -1365,6 +1373,56 @@ namespace Zexus.Views
                     };
                 }
 
+                // ── Parameter value modified ──
+                case "SetElementParameter":
+                {
+                    // Skip preview mode
+                    if (data != null && data.TryGetValue("preview", out var prev) && Convert.ToBoolean(prev))
+                        return null;
+
+                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
+                    string oldVal = data != null && data.TryGetValue("old_value", out var ov) ? ov?.ToString() : "";
+                    string newVal = data != null && data.TryGetValue("new_value", out var nv) ? nv?.ToString() : "";
+                    string elemName = data != null && data.TryGetValue("element_name", out var en) ? en?.ToString() : "";
+                    long elemId = 0;
+                    if (data != null && data.TryGetValue("element_id", out var eid))
+                        elemId = ConvertToLong(eid) ?? 0;
+
+                    var entry = new ParameterChangeEntry
+                    {
+                        ElementId = elemId,
+                        ElementName = elemName,
+                        OldValue = oldVal,
+                        NewValue = newVal
+                    };
+
+                    // Try to aggregate into existing record for same parameter name
+                    var existing = _outputRecords.LastOrDefault(r =>
+                        r.RecordType == OutputRecordType.ParameterSet &&
+                        r.ParameterName == paramName);
+
+                    if (existing != null)
+                    {
+                        existing.ChangeEntries.Add(entry);
+                        existing.Subtitle = $"{existing.ChangeEntries.Count} elements modified";
+                        existing.Timestamp = DateTime.Now;
+                        return null; // signal caller to just rebuild cards, not add new record
+                    }
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ParameterSet,
+                        Title = paramName,
+                        Subtitle = $"{elemName}: {oldVal} \u2192 {newVal}",
+                        IconGlyph = "\u270F",
+                        IconColor = ColWarning,
+                        ToolName = toolName,
+                        ParameterName = paramName,
+                        ChangeEntries = new List<ParameterChangeEntry> { entry },
+                        Data = data
+                    };
+                }
+
                 // Everything else (queries, edits, navigation) → no output record
                 default:
                     return null;
@@ -1469,7 +1527,8 @@ namespace Zexus.Views
                 Margin = new Thickness(0, 0, 0, 6)
             };
 
-            if (record.IsClickable)
+            bool isInteractive = record.IsClickable || record.IsExpandable;
+            if (isInteractive)
             {
                 card.Cursor = Cursors.Hand;
                 card.MouseEnter += (s, e) =>
@@ -1482,8 +1541,10 @@ namespace Zexus.Views
                     card.BorderBrush = new SolidColorBrush(ColGlassBorder);
                     card.Background = new SolidColorBrush(ColGlass);
                 };
-                card.MouseLeftButtonDown += (s, e) => OnOutputRecordClicked(record);
             }
+
+            if (record.IsClickable && !record.IsExpandable)
+                card.MouseLeftButtonDown += (s, e) => OnOutputRecordClicked(record);
 
             var content = new StackPanel();
 
@@ -1557,8 +1618,126 @@ namespace Zexus.Views
                 });
             }
 
-            // ── Row 3: Clickable hint ──
-            if (record.IsClickable)
+            // ── Row 3: Expandable detail list (ParameterSet batch) ──
+            if (record.IsExpandable)
+            {
+                bool isExpanded = _expandedRecordIds.Contains(record.Id);
+
+                // Toggle hint
+                var toggleText = new TextBlock
+                {
+                    Text = isExpanded
+                        ? $"\u25BC  Hide details ({record.ChangeEntries.Count})"
+                        : $"\u25B6  Show details ({record.ChangeEntries.Count})",
+                    FontSize = 10,
+                    Foreground = new SolidColorBrush(ColPrimaryLt),
+                    FontFamily = MainFont,
+                    Cursor = Cursors.Hand,
+                    Margin = new Thickness(22, 5, 0, 0)
+                };
+                toggleText.MouseLeftButtonDown += (s, e) =>
+                {
+                    if (_expandedRecordIds.Contains(record.Id))
+                        _expandedRecordIds.Remove(record.Id);
+                    else
+                        _expandedRecordIds.Add(record.Id);
+                    RebuildOutputCards();
+                    e.Handled = true;
+                };
+                content.Children.Add(toggleText);
+
+                // Expanded entries table
+                if (isExpanded)
+                {
+                    var detailBorder = new Border
+                    {
+                        Background = new SolidColorBrush(ColCodeBg),
+                        BorderBrush = new SolidColorBrush(ColBorder),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(6),
+                        Padding = new Thickness(8, 6, 8, 6),
+                        Margin = new Thickness(22, 4, 0, 0),
+                        MaxHeight = 240
+                    };
+
+                    var detailScroll = new ScrollViewer
+                    {
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+                    };
+
+                    var detailStack = new StackPanel();
+
+                    // Column header
+                    var headerRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+
+                    var hdrName = new TextBlock { Text = "Element", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+                    var hdrOld = new TextBlock { Text = "Old", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont, TextAlignment = TextAlignment.Right };
+                    var hdrArrow = new TextBlock { Text = "\u2192", FontSize = 9.5, Foreground = new SolidColorBrush(ColMuted),
+                        FontFamily = MonoFont, TextAlignment = TextAlignment.Center };
+                    var hdrNew = new TextBlock { Text = "New", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+
+                    Grid.SetColumn(hdrName, 0); Grid.SetColumn(hdrOld, 1);
+                    Grid.SetColumn(hdrArrow, 2); Grid.SetColumn(hdrNew, 3);
+                    headerRow.Children.Add(hdrName); headerRow.Children.Add(hdrOld);
+                    headerRow.Children.Add(hdrArrow); headerRow.Children.Add(hdrNew);
+                    detailStack.Children.Add(headerRow);
+
+                    // Separator
+                    detailStack.Children.Add(new Border
+                    {
+                        Height = 1, Background = new SolidColorBrush(ColBorder),
+                        Margin = new Thickness(0, 2, 0, 2)
+                    });
+
+                    // Each entry row
+                    foreach (var entry in record.ChangeEntries)
+                    {
+                        var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+
+                        var nameLabel = entry.ElementName ?? $"#{entry.ElementId}";
+                        if (nameLabel.Length > 20) nameLabel = nameLabel.Substring(0, 20) + "..";
+
+                        var colName = new TextBlock { Text = nameLabel, FontSize = 9.5,
+                            Foreground = new SolidColorBrush(ColTextSec), FontFamily = MonoFont,
+                            TextTrimming = TextTrimming.CharacterEllipsis };
+                        var colOld = new TextBlock { Text = entry.OldValue ?? "", FontSize = 9.5,
+                            Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
+                            TextAlignment = TextAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis };
+                        var colArrow = new TextBlock { Text = "\u2192", FontSize = 9.5,
+                            Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
+                            TextAlignment = TextAlignment.Center };
+                        var colNew = new TextBlock { Text = entry.NewValue ?? "", FontSize = 9.5,
+                            Foreground = new SolidColorBrush(ColSuccess), FontFamily = MonoFont,
+                            TextTrimming = TextTrimming.CharacterEllipsis };
+
+                        Grid.SetColumn(colName, 0); Grid.SetColumn(colOld, 1);
+                        Grid.SetColumn(colArrow, 2); Grid.SetColumn(colNew, 3);
+                        row.Children.Add(colName); row.Children.Add(colOld);
+                        row.Children.Add(colArrow); row.Children.Add(colNew);
+
+                        detailStack.Children.Add(row);
+                    }
+
+                    detailScroll.Content = detailStack;
+                    detailBorder.Child = detailScroll;
+                    content.Children.Add(detailBorder);
+                }
+            }
+
+            // ── Row 4: Clickable hint (non-expandable only) ──
+            if (record.IsClickable && !record.IsExpandable)
             {
                 string hint = record.ViewId.HasValue ? "Click to open in Revit"
                     : record.FilePath != null ? "Click to open file"
