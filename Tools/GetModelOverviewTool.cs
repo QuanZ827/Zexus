@@ -55,18 +55,35 @@ namespace Zexus.Tools
                 }
 
                 var projectInfo = doc.ProjectInformation;
-                
-                var allElements = new FilteredElementCollector(doc)
-                    .WhereElementIsNotElementType()
-                    .ToList();
-                
-                var categoryStats = allElements
-                    .Where(e => e.Category != null)
-                    .GroupBy(e => e.Category.Name)
-                    .OrderByDescending(g => g.Count())
+
+                // ── Per-category counting via collector — never loads all elements into memory ──
+                var categoryStats = new Dictionary<string, int>();
+                int totalElements = 0;
+
+                foreach (Category cat in doc.Settings.Categories)
+                {
+                    if (cat == null) continue;
+                    try
+                    {
+                        int count = new FilteredElementCollector(doc)
+                            .OfCategoryId(cat.Id)
+                            .WhereElementIsNotElementType()
+                            .GetElementCount();
+                        if (count > 0)
+                        {
+                            categoryStats[cat.Name] = count;
+                            totalElements += count;
+                        }
+                    }
+                    catch { }
+                }
+
+                // Sort by count descending, take top N
+                categoryStats = categoryStats
+                    .OrderByDescending(kv => kv.Value)
                     .Take(topCategories)
-                    .ToDictionary(g => g.Key, g => g.Count());
-                
+                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+
                 var levels = new FilteredElementCollector(doc)
                     .OfClass(typeof(Level))
                     .Cast<Level>()
@@ -78,19 +95,21 @@ namespace Zexus.Tools
                         ["elevation_m"] = Math.Round(l.Elevation * 0.3048, 2)
                     })
                     .ToList();
-                
+
                 var viewStats = new Dictionary<string, int>();
                 if (includeViews)
                 {
-                    var views = new FilteredElementCollector(doc)
-                        .OfClass(typeof(View))
-                        .Cast<View>()
-                        .Where(v => !v.IsTemplate)
-                        .ToList();
-                    
-                    viewStats = views
-                        .GroupBy(v => v.ViewType.ToString())
-                        .ToDictionary(g => g.Key, g => g.Count());
+                    // Single pass without intermediate ToList()
+                    foreach (var elem in new FilteredElementCollector(doc).OfClass(typeof(View)))
+                    {
+                        var view = (View)elem;
+                        if (view.IsTemplate) continue;
+                        var typeName = view.ViewType.ToString();
+                        if (viewStats.ContainsKey(typeName))
+                            viewStats[typeName]++;
+                        else
+                            viewStats[typeName] = 1;
+                    }
                 }
                 
                 var currentView = doc.ActiveView;
@@ -112,7 +131,7 @@ namespace Zexus.Tools
                     },
                     ["statistics"] = new Dictionary<string, object>
                     {
-                        ["total_elements"] = allElements.Count,
+                        ["total_elements"] = totalElements,
                         ["categories_count"] = categoryStats.Count,
                         ["levels_count"] = levels.Count,
                         ["linked_models_count"] = links.Count

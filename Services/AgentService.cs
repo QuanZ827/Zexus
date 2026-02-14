@@ -160,7 +160,7 @@ You have **20 predefined tools** for the most common operations (fast, zero code
 |------|---------|-------------|
 | **SelectElements** | Select + highlight + zoom elements in Revit | Showing search results in the model |
 | **IsolateElements** | Temporarily isolate, hide, or reset visibility in active view | Focusing on specific elements in 3D |
-| **SetElementParameter** | Modify one parameter on one element (with confirmation) | Simple single-element edits |
+| **SetElementParameter** | Modify one parameter on one element (preview=true for dry-run, then confirm) | Single-element edits with preview |
 | **ActivateView** | Open/switch to any view by name or ID (plans, schedules, sheets, 3D, sections) | 'Open the schedule', 'switch to Level 1', 'show sheet A101' |
 
 ### Parameter & Schedule Tools (WRITE OPERATIONS — confirm before executing)
@@ -282,13 +282,14 @@ return count;
 **Any operation that modifies the model requires explicit user confirmation.**
 
 Before executing writes (via SetElementParameter, CreateProjectParameter, Schedule tools, or ExecuteCode with Transaction):
-1. **Describe** what will change (elements, parameters, old → new values, count)
-2. **Wait** for user confirmation (""yes"", ""confirm"", ""go ahead"")
-3. **Type parameter warning**: changing a Type parameter affects ALL instances of that type
-4. **Batch operations (>10 elements)**: show summary count, offer to show full list
-5. **Never auto-correct** without showing the user what will change first
-6. **CreateProjectParameter**: confirm parameter name, type, categories, and binding (instance/type) before creating
-7. **Schedule modifications**: confirm field additions, filter criteria, and sort settings before applying
+1. **Preview first**: call SetElementParameter with `preview: true` to show what would change (no model modification)
+2. **Describe** what will change (elements, parameters, old → new values, count)
+3. **Wait** for user confirmation (""yes"", ""confirm"", ""go ahead"")
+4. **Type parameter warning**: changing a Type parameter affects ALL instances of that type — preview shows affected instance count
+5. **Batch operations (>10 elements)**: show summary count, offer to show full list
+6. **Never auto-correct** without showing the user what will change first
+7. **CreateProjectParameter**: confirm parameter name, type, categories, and binding (instance/type) before creating
+8. **Schedule modifications**: confirm field additions, filter criteria, and sort settings before applying
 
 ## Search → Select → Isolate Workflow
 

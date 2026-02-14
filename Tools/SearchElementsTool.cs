@@ -162,38 +162,45 @@ namespace Zexus.Tools
                         .WhereElementIsNotElementType();
                 }
                 
-                var elements = collector.ToList();
-                
+                // ── Build a single deferred LINQ chain — no intermediate ToList() ──
+                // Filters are applied lazily; only one pass over the data at the end.
+                IEnumerable<Element> query = collector;
+
                 if (!string.IsNullOrEmpty(familyFilter))
                 {
-                    elements = elements.Where(e => 
-                    {
-                        if (e is FamilyInstance fi)
-                            return fi.Symbol?.Family?.Name?.IndexOf(familyFilter, StringComparison.OrdinalIgnoreCase) >= 0;
-                        return false;
-                    }).ToList();
+                    query = query.Where(e =>
+                        e is FamilyInstance fi &&
+                        fi.Symbol?.Family?.Name?.IndexOf(familyFilter, StringComparison.OrdinalIgnoreCase) >= 0);
                 }
-                
+
                 if (!string.IsNullOrEmpty(typeFilter))
                 {
-                    elements = elements.Where(e => 
+                    query = query.Where(e =>
                     {
-                        string typeName = null;
-                        if (e is FamilyInstance fi)
-                            typeName = fi.Symbol?.Name;
-                        else
+                        string typeName = e is FamilyInstance fi
+                            ? fi.Symbol?.Name
+                            : null;
+                        if (typeName == null)
                         {
                             var typeId = e.GetTypeId();
                             if (typeId != null && typeId != ElementId.InvalidElementId)
                                 typeName = doc.GetElement(typeId)?.Name;
                         }
                         return typeName?.IndexOf(typeFilter, StringComparison.OrdinalIgnoreCase) >= 0;
-                    }).ToList();
+                    });
                 }
-                
+
                 if (!string.IsNullOrEmpty(levelFilter))
                 {
-                    elements = elements.Where(e => 
+                    // Pre-resolve level IDs matching the filter to avoid repeated string comparisons
+                    var matchingLevelIds = new HashSet<long>();
+                    foreach (Level lv in new FilteredElementCollector(doc).OfClass(typeof(Level)))
+                    {
+                        if (lv.Name.IndexOf(levelFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+                            matchingLevelIds.Add(RevitCompat.GetIdValue(lv.Id));
+                    }
+
+                    query = query.Where(e =>
                     {
                         try
                         {
@@ -202,22 +209,21 @@ namespace Zexus.Tools
                             {
                                 var levelId = levelParam.AsElementId();
                                 if (levelId != null && levelId != ElementId.InvalidElementId)
-                                {
-                                    var level = doc.GetElement(levelId) as Level;
-                                    return level?.Name?.IndexOf(levelFilter, StringComparison.OrdinalIgnoreCase) >= 0;
-                                }
+                                    return matchingLevelIds.Contains(RevitCompat.GetIdValue(levelId));
                             }
                         }
                         catch { }
                         return false;
-                    }).ToList();
+                    });
                 }
-                
+
                 if (paramFilter != null)
                 {
-                    elements = ApplyParameterFilter(elements, paramFilter);
+                    query = ApplyParameterFilter(query, paramFilter);
                 }
-                
+
+                // Single materialization: count + take in one pass
+                var elements = query.ToList();
                 var totalCount = elements.Count;
                 var resultElements = elements.Take(maxResults).ToList();
                 
@@ -278,7 +284,7 @@ namespace Zexus.Tools
             return null;
         }
         
-        private List<Element> ApplyParameterFilter(List<Element> elements, Dictionary<string, object> filter)
+        private IEnumerable<Element> ApplyParameterFilter(IEnumerable<Element> elements, Dictionary<string, object> filter)
         {
             if (!filter.TryGetValue("name", out var nameObj) || nameObj == null)
                 return elements;
@@ -324,9 +330,9 @@ namespace Zexus.Tools
                 {
                     return false;
                 }
-            }).ToList();
+            });
         }
-        
+
         private string GetParameterValueAsString(Parameter param)
         {
             try

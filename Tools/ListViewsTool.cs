@@ -73,28 +73,26 @@ namespace Zexus.Tools
                     }
                 }
 
-                // Collect views (exclude sheets and templates)
-                var views = new FilteredElementCollector(doc)
+                // ── Build a single deferred LINQ chain — one materialization at the end ──
+                IEnumerable<View> query = new FilteredElementCollector(doc)
                     .OfClass(typeof(View))
                     .Cast<View>()
-                    .Where(v => !v.IsTemplate && !(v is ViewSheet))
-                    .ToList();
+                    .Where(v => !v.IsTemplate && !(v is ViewSheet));
 
-                // Printable filter
                 if (printableOnly)
-                    views = views.Where(v => v.CanBePrinted).ToList();
+                    query = query.Where(v => v.CanBePrinted);
 
-                // Name filter
                 if (!string.IsNullOrEmpty(nameFilter))
-                    views = views.Where(v =>
-                        v.Name.IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                    query = query.Where(v =>
+                        v.Name.IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0);
 
-                // View type filter
                 if (!string.IsNullOrEmpty(viewTypeFilter))
                 {
                     if (Enum.TryParse<ViewType>(viewTypeFilter, true, out var vt))
-                        views = views.Where(v => v.ViewType == vt).ToList();
+                        query = query.Where(v => v.ViewType == vt);
                 }
+
+                var views = query.ToList();
 
                 // Build result
                 var viewList = new List<Dictionary<string, object>>();

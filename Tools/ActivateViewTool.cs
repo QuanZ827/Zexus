@@ -102,46 +102,41 @@ namespace Zexus.Tools
                 }
 
                 // ── Strategy 2: Search by name ──
-                var allViews = new FilteredElementCollector(doc)
+                // Build deferred chain, materialize once
+                IEnumerable<View> viewQuery = new FilteredElementCollector(doc)
                     .OfClass(typeof(View))
                     .Cast<View>()
-                    .Where(v => !v.IsTemplate)
-                    .ToList();
+                    .Where(v => !v.IsTemplate);
 
-                // Apply view_type filter if provided
                 if (!string.IsNullOrEmpty(viewTypeFilter))
-                {
-                    allViews = FilterByType(allViews, viewTypeFilter);
-                }
+                    viewQuery = FilterByType(viewQuery, viewTypeFilter);
+
+                var allViews = viewQuery.ToList();
 
                 // Step A: Exact name match (case-insensitive)
-                var exactMatches = allViews
+                var matches = allViews
                     .Where(v => v.Name.Equals(viewName, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 // Step B: For sheets, also match by SheetNumber
-                if (exactMatches.Count == 0)
+                if (matches.Count == 0)
                 {
-                    var sheetMatches = allViews
+                    matches = allViews
                         .OfType<ViewSheet>()
                         .Where(s => s.SheetNumber.Equals(viewName, StringComparison.OrdinalIgnoreCase))
                         .Cast<View>()
                         .ToList();
-
-                    if (sheetMatches.Count > 0)
-                        exactMatches = sheetMatches;
                 }
 
                 // Step C: Fuzzy (Contains) match
-                if (exactMatches.Count == 0)
+                if (matches.Count == 0)
                 {
-                    exactMatches = allViews
+                    matches = allViews
                         .Where(v =>
                         {
                             if (v.Name.IndexOf(viewName, StringComparison.OrdinalIgnoreCase) >= 0)
                                 return true;
 
-                            // Also check sheet number for partial match
                             if (v is ViewSheet sheet &&
                                 sheet.SheetNumber.IndexOf(viewName, StringComparison.OrdinalIgnoreCase) >= 0)
                                 return true;
@@ -152,19 +147,19 @@ namespace Zexus.Tools
                 }
 
                 // ── Evaluate results ──
-                if (exactMatches.Count == 0)
+                if (matches.Count == 0)
                 {
                     return ToolResult.Fail($"No view found matching '{viewName}'." +
                         (string.IsNullOrEmpty(viewTypeFilter) ? "" : $" (filtered by type: {viewTypeFilter})"));
                 }
 
-                if (exactMatches.Count == 1)
+                if (matches.Count == 1)
                 {
-                    return ActivateAndReturn(uiDoc, exactMatches[0]);
+                    return ActivateAndReturn(uiDoc, matches[0]);
                 }
 
                 // Multiple matches — return candidate list for LLM to choose
-                var candidates = exactMatches.Take(10).Select(v => new Dictionary<string, object>
+                var candidates = matches.Take(10).Select(v => new Dictionary<string, object>
                 {
                     ["id"] = RevitCompat.GetIdValue(v.Id),
                     ["name"] = v is ViewSheet vs ? $"{vs.SheetNumber} - {vs.Name}" : v.Name,
@@ -172,10 +167,10 @@ namespace Zexus.Tools
                 }).ToList();
 
                 return ToolResult.Ok(
-                    $"Found {exactMatches.Count} matching views. Use view_id to activate a specific one:",
+                    $"Found {matches.Count} matching views. Use view_id to activate a specific one:",
                     new Dictionary<string, object>
                     {
-                        ["match_count"] = exactMatches.Count,
+                        ["match_count"] = matches.Count,
                         ["candidates"] = candidates
                     });
             }
@@ -208,30 +203,30 @@ namespace Zexus.Tools
         /// <summary>
         /// Filter views by type string from the LLM.
         /// </summary>
-        private List<View> FilterByType(List<View> views, string typeFilter)
+        private IEnumerable<View> FilterByType(IEnumerable<View> views, string typeFilter)
         {
             switch (typeFilter.ToLower())
             {
                 case "floorplan":
-                    return views.Where(v => v.ViewType == ViewType.FloorPlan).ToList();
+                    return views.Where(v => v.ViewType == ViewType.FloorPlan);
                 case "ceilingplan":
-                    return views.Where(v => v.ViewType == ViewType.CeilingPlan).ToList();
+                    return views.Where(v => v.ViewType == ViewType.CeilingPlan);
                 case "section":
-                    return views.Where(v => v.ViewType == ViewType.Section).ToList();
+                    return views.Where(v => v.ViewType == ViewType.Section);
                 case "elevation":
-                    return views.Where(v => v.ViewType == ViewType.Elevation).ToList();
+                    return views.Where(v => v.ViewType == ViewType.Elevation);
                 case "threed":
-                    return views.Where(v => v.ViewType == ViewType.ThreeD).ToList();
+                    return views.Where(v => v.ViewType == ViewType.ThreeD);
                 case "schedule":
-                    return views.Where(v => v is ViewSchedule).ToList();
+                    return views.Where(v => v is ViewSchedule);
                 case "sheet":
-                    return views.Where(v => v is ViewSheet).ToList();
+                    return views.Where(v => v is ViewSheet);
                 case "legend":
-                    return views.Where(v => v.ViewType == ViewType.Legend).ToList();
+                    return views.Where(v => v.ViewType == ViewType.Legend);
                 case "draftingview":
-                    return views.Where(v => v.ViewType == ViewType.DraftingView).ToList();
+                    return views.Where(v => v.ViewType == ViewType.DraftingView);
                 default:
-                    return views; // Unknown filter — return all
+                    return views;
             }
         }
 

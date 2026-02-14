@@ -21,6 +21,7 @@ namespace Zexus.Tools
             "DESTRUCTIVE WRITE OPERATION: This permanently modifies the Revit model. " +
             "You MUST confirm the change with the user BEFORE calling this tool. " +
             "If instance parameter is read-only, falls back to Type parameter (affects ALL instances of that type). " +
+            "Set preview=true to dry-run: validates everything and shows what would change without modifying the model. " +
             "Returns old and new values for verification.";
 
         public ToolSchema GetInputSchema()
@@ -44,6 +45,11 @@ namespace Zexus.Tools
                     {
                         Type = "string",
                         Description = "New value to set. For Yes/No parameters, use 'Yes' or 'No'. For numbers, provide the numeric value."
+                    },
+                    ["preview"] = new PropertySchema
+                    {
+                        Type = "boolean",
+                        Description = "Dry-run mode: validate everything and show what would change without modifying the model. Default: false."
                     }
                 },
                 Required = new List<string> { "element_id", "parameter_name", "value" }
@@ -58,6 +64,7 @@ namespace Zexus.Tools
                 int elementId = 0;
                 string parameterName = null;
                 object newValue = null;
+                bool preview = false;
 
                 if (parameters != null)
                 {
@@ -67,12 +74,15 @@ namespace Zexus.Tools
                         else if (idObj is long l) elementId = (int)l;
                         else int.TryParse(idObj?.ToString(), out elementId);
                     }
-                    
+
                     if (parameters.TryGetValue("parameter_name", out var nameObj))
                         parameterName = nameObj?.ToString();
-                    
+
                     if (parameters.TryGetValue("value", out var valObj))
                         newValue = valObj;
+
+                    if (parameters.TryGetValue("preview", out var prevObj))
+                        preview = Convert.ToBoolean(prevObj);
                 }
 
                 // Validate required parameters
@@ -126,6 +136,52 @@ namespace Zexus.Tools
 
                 // Get old value for reporting
                 string oldValue = GetParameterDisplayValue(param);
+
+                // ── Preview / dry-run mode: validate only, no modification ──
+                if (preview)
+                {
+                    var previewData = new Dictionary<string, object>
+                    {
+                        ["preview"] = true,
+                        ["element_id"] = elementId,
+                        ["element_name"] = element.Name,
+                        ["element_category"] = element.Category?.Name ?? "",
+                        ["parameter_name"] = parameterName,
+                        ["current_value"] = oldValue,
+                        ["proposed_value"] = newValue?.ToString() ?? "",
+                        ["storage_type"] = param.StorageType.ToString(),
+                        ["is_type_parameter"] = isTypeParameter
+                    };
+
+                    string previewMsg;
+                    if (isTypeParameter)
+                    {
+                        // Count instances affected
+                        int instanceCount = 0;
+                        try
+                        {
+                            var typeId = targetElement.Id;
+                            instanceCount = new FilteredElementCollector(doc)
+                                .WhereElementIsNotElementType()
+                                .Where(e => e.GetTypeId() == typeId)
+                                .Count();
+                        }
+                        catch { }
+
+                        previewData["affected_instances"] = instanceCount;
+                        previewData["type_name"] = targetElement.Name;
+                        previewMsg = $"PREVIEW (no changes made): Would set TYPE parameter '{parameterName}' " +
+                            $"from '{oldValue}' to '{newValue}' on type '{targetElement.Name}'. " +
+                            $"This would affect {instanceCount} instance(s).";
+                    }
+                    else
+                    {
+                        previewMsg = $"PREVIEW (no changes made): Would set '{parameterName}' " +
+                            $"from '{oldValue}' to '{newValue}' on {element.Name} (ID: {elementId}).";
+                    }
+
+                    return ToolResult.Ok(previewMsg, previewData);
+                }
 
                 // Set the new value within a transaction
                 using (var trans = new Transaction(doc, $"AI Agent: Set {parameterName}"))
