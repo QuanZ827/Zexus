@@ -1697,10 +1697,38 @@ namespace Zexus.Views
                         Margin = new Thickness(0, 2, 0, 2)
                     });
 
-                    // Each entry row
+                    // Each entry row — clickable to highlight element in Revit
                     foreach (var entry in record.ChangeEntries)
                     {
-                        var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+                        var rowBorder = new Border
+                        {
+                            Margin = new Thickness(0, 1, 0, 1),
+                            CornerRadius = new CornerRadius(3),
+                            Padding = new Thickness(2, 1, 2, 1),
+                            Background = Brushes.Transparent,
+                            Cursor = Cursors.Hand,
+                            ToolTip = $"Click to select element #{entry.ElementId} in Revit"
+                        };
+
+                        // Hover effect
+                        rowBorder.MouseEnter += (s, e) =>
+                        {
+                            rowBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, ColPrimary.R, ColPrimary.G, ColPrimary.B));
+                        };
+                        rowBorder.MouseLeave += (s, e) =>
+                        {
+                            rowBorder.Background = Brushes.Transparent;
+                        };
+
+                        // Click → select/highlight element in Revit
+                        var capturedId = entry.ElementId;
+                        rowBorder.MouseLeftButtonDown += (s, e) =>
+                        {
+                            OnElementEntryClicked(capturedId);
+                            e.Handled = true;
+                        };
+
+                        var row = new Grid();
                         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
                         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
@@ -1727,7 +1755,8 @@ namespace Zexus.Views
                         row.Children.Add(colName); row.Children.Add(colOld);
                         row.Children.Add(colArrow); row.Children.Add(colNew);
 
-                        detailStack.Children.Add(row);
+                        rowBorder.Child = row;
+                        detailStack.Children.Add(rowBorder);
                     }
 
                     detailScroll.Content = detailStack;
@@ -1794,6 +1823,38 @@ namespace Zexus.Views
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[Zexus] Output record click error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Selects and highlights an element in Revit when user clicks on an entry row
+        /// in the expanded parameter change detail table.
+        /// Uses SelectElements tool which will select the element (blue highlight) and zoom to fit.
+        /// </summary>
+        private async void OnElementEntryClicked(long elementId)
+        {
+            try
+            {
+                if (elementId <= 0) return;
+
+                SetStatus($"Selecting element #{elementId}...", true);
+
+                var args = new Dictionary<string, object>
+                {
+                    ["element_ids"] = new List<long> { elementId },
+                    ["zoom_to_fit"] = true,
+                    ["clear_previous"] = true
+                };
+
+                await App.RevitEventHandler.ExecuteToolAsync("SelectElements", args);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Zexus] Element highlight click error: {ex.Message}");
+            }
+            finally
+            {
+                SetStatus("", false);
             }
         }
 
