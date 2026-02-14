@@ -11,6 +11,7 @@ namespace Zexus.Models
     public enum OutputRecordType
     {
         ScheduleCreated,
+        ScheduleModified,
         ParameterCreated,
         ParameterSet,
         FileExported,
@@ -26,6 +27,17 @@ namespace Zexus.Models
         public string ElementName { get; set; }
         public string OldValue { get; set; }
         public string NewValue { get; set; }
+    }
+
+    /// <summary>
+    /// One row inside a schedule modification aggregation record.
+    /// </summary>
+    public class ScheduleChangeEntry
+    {
+        public string ChangeType { get; set; }   // "Field" / "Format" / "Filter" / "Sort"
+        public string Action { get; set; }        // "added" / "removed" / "reordered" / "set" / "cleared"
+        public string FieldName { get; set; }     // the field/column name involved
+        public string Detail { get; set; }        // extra info (e.g. "position 3", "= Level 1")
     }
 
     public class OutputRecord
@@ -49,12 +61,18 @@ namespace Zexus.Models
         public string ParameterName { get; set; }
         public List<ParameterChangeEntry> ChangeEntries { get; set; }
 
+        // ── Schedule modification aggregation (expandable) ──
+        public string ScheduleName { get; set; }
+        public List<ScheduleChangeEntry> ScheduleChangeEntries { get; set; }
+
         // ── Full result data ──
         public Dictionary<string, object> Data { get; set; }
 
         // ── Computed ──
         public bool IsClickable => ViewId.HasValue || FilePath != null || (FilePaths != null && FilePaths.Count > 0);
-        public bool IsExpandable => ChangeEntries != null && ChangeEntries.Count > 0;
+        public bool IsExpandable =>
+            (ChangeEntries != null && ChangeEntries.Count > 0) ||
+            (ScheduleChangeEntries != null && ScheduleChangeEntries.Count > 0);
     }
 
     public class ThinkingChainNode

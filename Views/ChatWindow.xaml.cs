@@ -1423,6 +1423,50 @@ namespace Zexus.Views
                     };
                 }
 
+                // ── Schedule modifications (aggregated per schedule) ──
+                case "AddScheduleField":
+                case "FormatScheduleField":
+                case "ModifyScheduleFilter":
+                case "ModifyScheduleSort":
+                {
+                    // Skip read-only list operations
+                    if (data != null && data.TryGetValue("mode", out var mode) && mode?.ToString() == "list")
+                        return null;
+
+                    string schedName = data != null && data.TryGetValue("schedule_name", out var sn) ? sn?.ToString() : null;
+                    if (string.IsNullOrEmpty(schedName)) return null;
+
+                    var changeEntry = BuildScheduleChangeEntry(toolName, data);
+                    if (changeEntry == null) return null;
+
+                    // Try to aggregate into existing record for same schedule
+                    var existing = _outputRecords.LastOrDefault(r =>
+                        r.RecordType == OutputRecordType.ScheduleModified &&
+                        r.ScheduleName == schedName);
+
+                    if (existing != null)
+                    {
+                        existing.ScheduleChangeEntries.Add(changeEntry);
+                        existing.Subtitle = FormatScheduleModSummary(existing.ScheduleChangeEntries);
+                        existing.Timestamp = DateTime.Now;
+                        return null; // signal caller to rebuild cards
+                    }
+
+                    var entries = new List<ScheduleChangeEntry> { changeEntry };
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ScheduleModified,
+                        Title = schedName,
+                        Subtitle = FormatScheduleModSummary(entries),
+                        IconGlyph = "\U0001F4CB",
+                        IconColor = ColPrimary,
+                        ToolName = toolName,
+                        ScheduleName = schedName,
+                        ScheduleChangeEntries = entries,
+                        Data = data
+                    };
+                }
+
                 // Everything else (queries, edits, navigation) → no output record
                 default:
                     return null;
@@ -1618,17 +1662,18 @@ namespace Zexus.Views
                 });
             }
 
-            // ── Row 3: Expandable detail list (ParameterSet batch) ──
+            // ── Row 3: Expandable detail list ──
             if (record.IsExpandable)
             {
                 bool isExpanded = _expandedRecordIds.Contains(record.Id);
+                int detailCount = record.ChangeEntries?.Count ?? record.ScheduleChangeEntries?.Count ?? 0;
 
                 // Toggle hint
                 var toggleText = new TextBlock
                 {
                     Text = isExpanded
-                        ? $"\u25BC  Hide details ({record.ChangeEntries.Count})"
-                        : $"\u25B6  Show details ({record.ChangeEntries.Count})",
+                        ? $"\u25BC  Hide details ({detailCount})"
+                        : $"\u25B6  Show details ({detailCount})",
                     FontSize = 10,
                     Foreground = new SolidColorBrush(ColPrimaryLt),
                     FontFamily = MainFont,
@@ -1668,95 +1713,15 @@ namespace Zexus.Views
 
                     var detailStack = new StackPanel();
 
-                    // Column header
-                    var headerRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
-                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-                    headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-
-                    var hdrName = new TextBlock { Text = "Element", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
-                    var hdrOld = new TextBlock { Text = "Old", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont, TextAlignment = TextAlignment.Right };
-                    var hdrArrow = new TextBlock { Text = "\u2192", FontSize = 9.5, Foreground = new SolidColorBrush(ColMuted),
-                        FontFamily = MonoFont, TextAlignment = TextAlignment.Center };
-                    var hdrNew = new TextBlock { Text = "New", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
-
-                    Grid.SetColumn(hdrName, 0); Grid.SetColumn(hdrOld, 1);
-                    Grid.SetColumn(hdrArrow, 2); Grid.SetColumn(hdrNew, 3);
-                    headerRow.Children.Add(hdrName); headerRow.Children.Add(hdrOld);
-                    headerRow.Children.Add(hdrArrow); headerRow.Children.Add(hdrNew);
-                    detailStack.Children.Add(headerRow);
-
-                    // Separator
-                    detailStack.Children.Add(new Border
+                    // ── Branch A: ParameterSet batch (Element | Old → New) ──
+                    if (record.ChangeEntries != null && record.ChangeEntries.Count > 0)
                     {
-                        Height = 1, Background = new SolidColorBrush(ColBorder),
-                        Margin = new Thickness(0, 2, 0, 2)
-                    });
-
-                    // Each entry row — clickable to highlight element in Revit
-                    foreach (var entry in record.ChangeEntries)
+                        BuildParameterChangeDetailTable(detailStack, record.ChangeEntries);
+                    }
+                    // ── Branch B: Schedule modifications (Action | Field | Detail) ──
+                    else if (record.ScheduleChangeEntries != null && record.ScheduleChangeEntries.Count > 0)
                     {
-                        var rowBorder = new Border
-                        {
-                            Margin = new Thickness(0, 1, 0, 1),
-                            CornerRadius = new CornerRadius(3),
-                            Padding = new Thickness(2, 1, 2, 1),
-                            Background = Brushes.Transparent,
-                            Cursor = Cursors.Hand,
-                            ToolTip = $"Click to select element #{entry.ElementId} in Revit"
-                        };
-
-                        // Hover effect
-                        rowBorder.MouseEnter += (s, e) =>
-                        {
-                            rowBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, ColPrimary.R, ColPrimary.G, ColPrimary.B));
-                        };
-                        rowBorder.MouseLeave += (s, e) =>
-                        {
-                            rowBorder.Background = Brushes.Transparent;
-                        };
-
-                        // Click → select/highlight element in Revit
-                        var capturedId = entry.ElementId;
-                        rowBorder.MouseLeftButtonDown += (s, e) =>
-                        {
-                            OnElementEntryClicked(capturedId);
-                            e.Handled = true;
-                        };
-
-                        var row = new Grid();
-                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
-                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
-
-                        var nameLabel = entry.ElementName ?? $"#{entry.ElementId}";
-                        if (nameLabel.Length > 20) nameLabel = nameLabel.Substring(0, 20) + "..";
-
-                        var colName = new TextBlock { Text = nameLabel, FontSize = 9.5,
-                            Foreground = new SolidColorBrush(ColTextSec), FontFamily = MonoFont,
-                            TextTrimming = TextTrimming.CharacterEllipsis };
-                        var colOld = new TextBlock { Text = entry.OldValue ?? "", FontSize = 9.5,
-                            Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
-                            TextAlignment = TextAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis };
-                        var colArrow = new TextBlock { Text = "\u2192", FontSize = 9.5,
-                            Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
-                            TextAlignment = TextAlignment.Center };
-                        var colNew = new TextBlock { Text = entry.NewValue ?? "", FontSize = 9.5,
-                            Foreground = new SolidColorBrush(ColSuccess), FontFamily = MonoFont,
-                            TextTrimming = TextTrimming.CharacterEllipsis };
-
-                        Grid.SetColumn(colName, 0); Grid.SetColumn(colOld, 1);
-                        Grid.SetColumn(colArrow, 2); Grid.SetColumn(colNew, 3);
-                        row.Children.Add(colName); row.Children.Add(colOld);
-                        row.Children.Add(colArrow); row.Children.Add(colNew);
-
-                        rowBorder.Child = row;
-                        detailStack.Children.Add(rowBorder);
+                        BuildScheduleChangeDetailTable(detailStack, record.ScheduleChangeEntries);
                     }
 
                     detailScroll.Content = detailStack;
@@ -1789,6 +1754,181 @@ namespace Zexus.Views
 
             card.Child = content;
             return card;
+        }
+
+        /// <summary>
+        /// Builds the expanded detail table for ParameterSet batch changes.
+        /// Columns: Element | Old | → | New. Each row is clickable to highlight the element.
+        /// </summary>
+        private void BuildParameterChangeDetailTable(StackPanel detailStack, List<ParameterChangeEntry> entries)
+        {
+            // Column header
+            var headerRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+
+            var hdrName = new TextBlock { Text = "Element", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+            var hdrOld = new TextBlock { Text = "Old", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont, TextAlignment = TextAlignment.Right };
+            var hdrArrow = new TextBlock { Text = "\u2192", FontSize = 9.5, Foreground = new SolidColorBrush(ColMuted),
+                FontFamily = MonoFont, TextAlignment = TextAlignment.Center };
+            var hdrNew = new TextBlock { Text = "New", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+
+            Grid.SetColumn(hdrName, 0); Grid.SetColumn(hdrOld, 1);
+            Grid.SetColumn(hdrArrow, 2); Grid.SetColumn(hdrNew, 3);
+            headerRow.Children.Add(hdrName); headerRow.Children.Add(hdrOld);
+            headerRow.Children.Add(hdrArrow); headerRow.Children.Add(hdrNew);
+            detailStack.Children.Add(headerRow);
+
+            detailStack.Children.Add(new Border
+            {
+                Height = 1, Background = new SolidColorBrush(ColBorder),
+                Margin = new Thickness(0, 2, 0, 2)
+            });
+
+            // Each entry row — clickable to highlight element in Revit
+            foreach (var entry in entries)
+            {
+                var rowBorder = new Border
+                {
+                    Margin = new Thickness(0, 1, 0, 1),
+                    CornerRadius = new CornerRadius(3),
+                    Padding = new Thickness(2, 1, 2, 1),
+                    Background = Brushes.Transparent,
+                    Cursor = Cursors.Hand,
+                    ToolTip = $"Click to select element #{entry.ElementId} in Revit"
+                };
+
+                rowBorder.MouseEnter += (s, e) =>
+                {
+                    rowBorder.Background = new SolidColorBrush(Color.FromArgb(0x18, ColPrimary.R, ColPrimary.G, ColPrimary.B));
+                };
+                rowBorder.MouseLeave += (s, e) =>
+                {
+                    rowBorder.Background = Brushes.Transparent;
+                };
+
+                var capturedId = entry.ElementId;
+                rowBorder.MouseLeftButtonDown += (s, e) =>
+                {
+                    OnElementEntryClicked(capturedId);
+                    e.Handled = true;
+                };
+
+                var row = new Grid();
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+
+                var nameLabel = entry.ElementName ?? $"#{entry.ElementId}";
+                if (nameLabel.Length > 20) nameLabel = nameLabel.Substring(0, 20) + "..";
+
+                var colName = new TextBlock { Text = nameLabel, FontSize = 9.5,
+                    Foreground = new SolidColorBrush(ColTextSec), FontFamily = MonoFont,
+                    TextTrimming = TextTrimming.CharacterEllipsis };
+                var colOld = new TextBlock { Text = entry.OldValue ?? "", FontSize = 9.5,
+                    Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
+                    TextAlignment = TextAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis };
+                var colArrow = new TextBlock { Text = "\u2192", FontSize = 9.5,
+                    Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont,
+                    TextAlignment = TextAlignment.Center };
+                var colNew = new TextBlock { Text = entry.NewValue ?? "", FontSize = 9.5,
+                    Foreground = new SolidColorBrush(ColSuccess), FontFamily = MonoFont,
+                    TextTrimming = TextTrimming.CharacterEllipsis };
+
+                Grid.SetColumn(colName, 0); Grid.SetColumn(colOld, 1);
+                Grid.SetColumn(colArrow, 2); Grid.SetColumn(colNew, 3);
+                row.Children.Add(colName); row.Children.Add(colOld);
+                row.Children.Add(colArrow); row.Children.Add(colNew);
+
+                rowBorder.Child = row;
+                detailStack.Children.Add(rowBorder);
+            }
+        }
+
+        /// <summary>
+        /// Builds the expanded detail table for schedule modification aggregation.
+        /// Columns: Action | Field | Detail. Color-coded by change type.
+        /// </summary>
+        private void BuildScheduleChangeDetailTable(StackPanel detailStack, List<ScheduleChangeEntry> entries)
+        {
+            // Column header
+            var headerRow = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var hdrAction = new TextBlock { Text = "Action", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+            var hdrField = new TextBlock { Text = "Field", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+            var hdrDetail = new TextBlock { Text = "Detail", FontSize = 9.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColMuted), FontFamily = MonoFont };
+
+            Grid.SetColumn(hdrAction, 0); Grid.SetColumn(hdrField, 1); Grid.SetColumn(hdrDetail, 2);
+            headerRow.Children.Add(hdrAction); headerRow.Children.Add(hdrField); headerRow.Children.Add(hdrDetail);
+            detailStack.Children.Add(headerRow);
+
+            detailStack.Children.Add(new Border
+            {
+                Height = 1, Background = new SolidColorBrush(ColBorder),
+                Margin = new Thickness(0, 2, 0, 2)
+            });
+
+            foreach (var entry in entries)
+            {
+                // Color-code by change type
+                Color typeColor;
+                switch (entry.ChangeType)
+                {
+                    case "Field":  typeColor = ColSuccess; break;  // green
+                    case "Format": typeColor = ColWarning; break;  // amber
+                    case "Filter": typeColor = ColPrimary; break;  // indigo
+                    case "Sort":   typeColor = ColAccent;  break;  // purple
+                    default:       typeColor = ColTextSec; break;
+                }
+
+                string actionPrefix = entry.Action == "added" ? "+" :
+                                      entry.Action == "removed" ? "−" :
+                                      entry.Action == "cleared" ? "×" : "~";
+
+                var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var colAction = new TextBlock
+                {
+                    Text = $"{actionPrefix} {entry.ChangeType}",
+                    FontSize = 9.5, FontFamily = MonoFont,
+                    Foreground = new SolidColorBrush(typeColor),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                var colField = new TextBlock
+                {
+                    Text = entry.FieldName ?? "",
+                    FontSize = 9.5, FontFamily = MonoFont,
+                    Foreground = new SolidColorBrush(ColTextSec),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                var colDetail = new TextBlock
+                {
+                    Text = entry.Detail ?? "",
+                    FontSize = 9.5, FontFamily = MonoFont,
+                    Foreground = new SolidColorBrush(ColMuted),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+
+                Grid.SetColumn(colAction, 0); Grid.SetColumn(colField, 1); Grid.SetColumn(colDetail, 2);
+                row.Children.Add(colAction); row.Children.Add(colField); row.Children.Add(colDetail);
+
+                detailStack.Children.Add(row);
+            }
         }
 
         private async void OnOutputRecordClicked(OutputRecord record)
@@ -1891,6 +2031,174 @@ namespace Zexus.Views
             if (val is int i) return i;
             if (long.TryParse(val.ToString(), out long parsed)) return parsed;
             return null;
+        }
+
+        /// <summary>
+        /// Builds a ScheduleChangeEntry from a schedule modification tool's result data.
+        /// </summary>
+        private ScheduleChangeEntry BuildScheduleChangeEntry(string toolName, Dictionary<string, object> data)
+        {
+            if (data == null) return null;
+
+            string fieldName = data.TryGetValue("field_name", out var fn) ? fn?.ToString() : "";
+
+            switch (toolName)
+            {
+                case "AddScheduleField":
+                {
+                    // Determine action from result data
+                    bool alreadyExists = data.TryGetValue("already_exists", out var ae) && Convert.ToBoolean(ae);
+                    if (alreadyExists) return null; // skip warnings
+
+                    bool isRemove = data.TryGetValue("removed_field", out var rf) && rf != null;
+                    if (isRemove)
+                    {
+                        return new ScheduleChangeEntry
+                        {
+                            ChangeType = "Field", Action = "removed",
+                            FieldName = rf?.ToString() ?? fieldName,
+                            Detail = ""
+                        };
+                    }
+
+                    bool isReorder = data.ContainsKey("from_position") && data.ContainsKey("to_position");
+                    if (isReorder)
+                    {
+                        return new ScheduleChangeEntry
+                        {
+                            ChangeType = "Field", Action = "reordered",
+                            FieldName = fieldName,
+                            Detail = $"{data["from_position"]} \u2192 {data["to_position"]}"
+                        };
+                    }
+
+                    // Default: field added
+                    string pos = data.TryGetValue("position", out var p) ? $"pos {p}" : "";
+                    bool hidden = data.TryGetValue("is_hidden", out var h) && Convert.ToBoolean(h);
+                    string detail = hidden ? $"{pos}, hidden" : pos;
+
+                    return new ScheduleChangeEntry
+                    {
+                        ChangeType = "Field", Action = "added",
+                        FieldName = data.TryGetValue("column_header", out var ch) ? ch?.ToString() ?? fieldName : fieldName,
+                        Detail = detail.Trim().TrimStart(',').Trim()
+                    };
+                }
+
+                case "FormatScheduleField":
+                {
+                    var changes = new List<string>();
+                    if (data.TryGetValue("changes", out var ch) && ch is System.Collections.IEnumerable changeList)
+                    {
+                        foreach (var c in changeList)
+                            if (c != null) changes.Add(c.ToString());
+                    }
+
+                    return new ScheduleChangeEntry
+                    {
+                        ChangeType = "Format", Action = "set",
+                        FieldName = fieldName,
+                        Detail = changes.Count > 0 ? string.Join(", ", changes) : ""
+                    };
+                }
+
+                case "ModifyScheduleFilter":
+                {
+                    bool isRemove = data.ContainsKey("removed_index");
+                    bool isClear = data.ContainsKey("cleared");
+
+                    if (isClear)
+                    {
+                        int cleared = data.TryGetValue("cleared", out var cl) ? Convert.ToInt32(cl) : 0;
+                        return cleared > 0 ? new ScheduleChangeEntry
+                        {
+                            ChangeType = "Filter", Action = "cleared",
+                            FieldName = "", Detail = $"{cleared} filter(s)"
+                        } : null;
+                    }
+
+                    if (isRemove)
+                    {
+                        return new ScheduleChangeEntry
+                        {
+                            ChangeType = "Filter", Action = "removed",
+                            FieldName = fieldName, Detail = ""
+                        };
+                    }
+
+                    string op = data.TryGetValue("operator", out var opv) ? opv?.ToString() : "";
+                    string val = data.TryGetValue("value", out var v) ? v?.ToString() : "";
+
+                    return new ScheduleChangeEntry
+                    {
+                        ChangeType = "Filter", Action = "added",
+                        FieldName = fieldName,
+                        Detail = $"{op} {val}".Trim()
+                    };
+                }
+
+                case "ModifyScheduleSort":
+                {
+                    bool isRemove = data.ContainsKey("removed_index");
+                    bool isClear = data.ContainsKey("cleared");
+
+                    if (isClear)
+                    {
+                        int cleared = data.TryGetValue("cleared", out var cl) ? Convert.ToInt32(cl) : 0;
+                        return cleared > 0 ? new ScheduleChangeEntry
+                        {
+                            ChangeType = "Sort", Action = "cleared",
+                            FieldName = "", Detail = $"{cleared} sort(s)"
+                        } : null;
+                    }
+
+                    if (isRemove)
+                    {
+                        return new ScheduleChangeEntry
+                        {
+                            ChangeType = "Sort", Action = "removed",
+                            FieldName = fieldName, Detail = ""
+                        };
+                    }
+
+                    string order = data.TryGetValue("sort_order", out var so) ? so?.ToString() : "";
+                    return new ScheduleChangeEntry
+                    {
+                        ChangeType = "Sort", Action = "added",
+                        FieldName = fieldName,
+                        Detail = order
+                    };
+                }
+
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Generates a concise summary like "3 fields added, 1 filter set, 1 sort added".
+        /// </summary>
+        private string FormatScheduleModSummary(List<ScheduleChangeEntry> entries)
+        {
+            if (entries == null || entries.Count == 0) return "Modified";
+
+            var counts = new Dictionary<string, int>();
+            foreach (var e in entries)
+            {
+                var key = $"{e.ChangeType} {e.Action}";
+                if (counts.ContainsKey(key))
+                    counts[key]++;
+                else
+                    counts[key] = 1;
+            }
+
+            var parts = new List<string>();
+            foreach (var kv in counts)
+            {
+                parts.Add(kv.Value == 1 ? $"1 {kv.Key}" : $"{kv.Value} {kv.Key}");
+            }
+
+            return string.Join(", ", parts);
         }
 
         #endregion
