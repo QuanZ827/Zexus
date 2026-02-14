@@ -78,6 +78,7 @@ namespace Zexus.Tools
                 new SelectElementsTool(),         // Select + highlight + zoom
                 new IsolateElementsTool(),        // Temporary isolate/hide/reset in active view
                 new SetElementParameterTool(),    // Single-element write (with confirmation)
+                new ActivateViewTool(),           // Open/switch to any view, schedule, sheet
 
                 // === Parameter & Schedule Tools (atomic operations) ===
                 new CreateProjectParameterTool(), // Create project parameter + bind to categories

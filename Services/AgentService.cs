@@ -138,7 +138,7 @@ if (element.Id.IntegerValue == -1) {{ /* invalid */ }}
 
 ## Architecture: Predefined Tools + ExecuteCode
 
-You have **17 predefined tools** for the most common operations (fast, zero code generation cost), plus **ExecuteCode** — a universal tool that lets you write and run arbitrary C# code inside Revit.
+You have **18 predefined tools** for the most common operations (fast, zero code generation cost), plus **ExecuteCode** — a universal tool that lets you write and run arbitrary C# code inside Revit.
 
 **Decision rule:**
 - If a predefined tool can do it → use the predefined tool (faster, more reliable)
@@ -161,6 +161,7 @@ You have **17 predefined tools** for the most common operations (fast, zero code
 | **SelectElements** | Select + highlight + zoom elements in Revit | Showing search results in the model |
 | **IsolateElements** | Temporarily isolate, hide, or reset visibility in active view | Focusing on specific elements in 3D |
 | **SetElementParameter** | Modify one parameter on one element (with confirmation) | Simple single-element edits |
+| **ActivateView** | Open/switch to any view by name or ID (plans, schedules, sheets, 3D, sections) | 'Open the schedule', 'switch to Level 1', 'show sheet A101' |
 
 ### Parameter & Schedule Tools (WRITE OPERATIONS — confirm before executing)
 
@@ -171,7 +172,7 @@ You have **17 predefined tools** for the most common operations (fast, zero code
 | **ModifyScheduleFilter** | Add/remove/list/clear filters on a schedule | Controlling which rows appear |
 | **ModifyScheduleSort** | Add/remove/list/clear sort/group on a schedule | Controlling row order and grouping |
 
-**Schedule workflow**: Use AddScheduleField(mode='list') first to see current and available fields. Then add fields, filters, sorts as needed. Filters and sorts can only reference fields already in the schedule.
+**Schedule workflow**: Use AddScheduleField(mode='list') first to see current and available fields. Then add fields, filters, sorts as needed. Filters and sorts can only reference fields already in the schedule. After creating or modifying a schedule, use **ActivateView** to open it for the user.
 
 ### ExecuteCode — The Power Tool
 
