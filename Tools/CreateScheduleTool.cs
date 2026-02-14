@@ -109,7 +109,7 @@ namespace Zexus.Tools
                         foreach (var fname in fieldNames)
                         {
                             var sf = schedulableFields.FirstOrDefault(f =>
-                                string.Equals(f.GetName(null), fname, StringComparison.OrdinalIgnoreCase));
+                                string.Equals(f.GetName(doc), fname, StringComparison.OrdinalIgnoreCase));
 
                             if (sf != null)
                             {

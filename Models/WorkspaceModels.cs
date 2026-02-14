@@ -6,6 +6,44 @@ namespace Zexus.Models
 {
     public enum ThinkingNodeStatus { Pending, Active, Completed, Failed }
 
+    // ─── Output Preview Panel Models ───
+
+    public enum OutputRecordType
+    {
+        ScheduleCreated,
+        ViewActivated,
+        ScheduleModified,
+        FileExported,
+        FilePrinted,
+        ParameterSet,
+        ParameterCreated,
+        QueryResult
+    }
+
+    public class OutputRecord
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public OutputRecordType RecordType { get; set; }
+        public string Title { get; set; }
+        public string Subtitle { get; set; }
+        public string IconGlyph { get; set; }
+        public Color IconColor { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+        public string ToolName { get; set; }
+
+        // ── Navigation fields ──
+        public long? ViewId { get; set; }
+        public string FilePath { get; set; }
+        public List<string> FilePaths { get; set; }
+        public string FolderPath { get; set; }
+
+        // ── Full result data ──
+        public Dictionary<string, object> Data { get; set; }
+
+        // ── Computed ──
+        public bool IsClickable => ViewId.HasValue || FilePath != null || (FilePaths != null && FilePaths.Count > 0);
+    }
+
     public class ThinkingChainNode
     {
         public string Id { get; set; }

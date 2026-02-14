@@ -13,6 +13,8 @@ using Zexus.Services;
 using Color = System.Windows.Media.Color;
 using Grid = System.Windows.Controls.Grid;
 using Visibility = System.Windows.Visibility;
+using SysProcess = System.Diagnostics.Process;
+using ProcessStartInfo = System.Diagnostics.ProcessStartInfo;
 
 namespace Zexus.Views
 {
@@ -27,6 +29,10 @@ namespace Zexus.Views
         // ─── Workspace State ───
         private WorkspaceState _workspaceState;
         private StackPanel _wsChainContainer;
+
+        // ─── Output Preview Panel ───
+        private readonly List<OutputRecord> _outputRecords = new List<OutputRecord>();
+        private StackPanel _outputCardsContainer;
 
         // ─── Design Tokens (matching reference palette) ───
         static readonly Color ColBg         = Color.FromRgb(0x08, 0x08, 0x0e);   // #08080e  background
@@ -127,6 +133,8 @@ namespace Zexus.Views
                 AddSystemMessage("New conversation started.");
                 CollapseWorkspace();
                 _workspaceState = null;
+                _outputRecords.Clear();
+                CollapseOutputPanel();
             }
         }
 
@@ -756,6 +764,15 @@ namespace Zexus.Views
 
                 _workspaceState.CompletedSteps++;
                 RebuildThinkingChain();
+
+                // ── Generate Output Record ──
+                var outputRecord = MapToolResultToOutputRecord(toolName, result);
+                if (outputRecord != null)
+                {
+                    _outputRecords.Add(outputRecord);
+                    ShowOutputPanel();
+                    RebuildOutputCards();
+                }
             }));
         }
 
@@ -1243,6 +1260,483 @@ namespace Zexus.Views
                 case "ExportDocument": return ("Export", Color.FromRgb(0x10, 0xb9, 0x81), "E");
                 default: return ("Execute", Color.FromRgb(0x94, 0xa3, 0xb8), "?");
             }
+        }
+
+        #endregion
+
+        #region Output Preview Panel
+
+        private OutputRecord MapToolResultToOutputRecord(string toolName, ToolResult result)
+        {
+            if (!result.Success) return null;
+            var data = result.Data;
+
+            switch (toolName)
+            {
+                case "CreateSchedule":
+                {
+                    long? viewId = null;
+                    if (data != null && data.TryGetValue("schedule_id", out var sid))
+                        viewId = ConvertToLong(sid);
+
+                    string catName = data != null && data.TryGetValue("category", out var c) ? c?.ToString() : "";
+                    string schedName = data != null && data.TryGetValue("schedule_name", out var sn) ? sn?.ToString() : "Schedule";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ScheduleCreated,
+                        Title = schedName,
+                        Subtitle = $"Created \u2022 {catName}",
+                        IconGlyph = "\U0001F4CA",
+                        IconColor = ColSuccess,
+                        ToolName = toolName,
+                        ViewId = viewId,
+                        Data = data
+                    };
+                }
+
+                case "ActivateView":
+                {
+                    long? viewId = null;
+                    if (data != null && data.TryGetValue("view_id", out var vid))
+                        viewId = ConvertToLong(vid);
+
+                    string viewName = data != null && data.TryGetValue("view_name", out var vn) ? vn?.ToString() : "View";
+                    string viewType = data != null && data.TryGetValue("view_type", out var vt) ? vt?.ToString() : "";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ViewActivated,
+                        Title = viewName,
+                        Subtitle = $"Activated \u2022 {viewType}",
+                        IconGlyph = "\U0001F4D0",
+                        IconColor = ColAccent,
+                        ToolName = toolName,
+                        ViewId = viewId,
+                        Data = data
+                    };
+                }
+
+                case "AddScheduleField":
+                case "FormatScheduleField":
+                case "ModifyScheduleFilter":
+                case "ModifyScheduleSort":
+                {
+                    string schedName = data != null && data.TryGetValue("schedule_name", out var sn) ? sn?.ToString() : "Schedule";
+                    string action = toolName == "AddScheduleField" ? "Field added"
+                        : toolName == "FormatScheduleField" ? "Formatted"
+                        : toolName == "ModifyScheduleFilter" ? "Filter updated"
+                        : "Sort updated";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ScheduleModified,
+                        Title = schedName,
+                        Subtitle = action,
+                        IconGlyph = "\U0001F4CA",
+                        IconColor = ColAccent,
+                        ToolName = toolName,
+                        Data = data
+                    };
+                }
+
+                case "ExportDocument":
+                {
+                    string format = data != null && data.TryGetValue("format", out var f) ? f?.ToString() : "File";
+                    string folder = data != null && data.TryGetValue("output_folder", out var fo) ? fo?.ToString() : null;
+                    var files = ExtractFileList(data, "output_files");
+                    int count = files?.Count ?? 0;
+
+                    string firstFile = files != null && files.Count > 0 ? files[0] : null;
+                    // Build full path if file is just a name
+                    if (firstFile != null && folder != null && !System.IO.Path.IsPathRooted(firstFile))
+                        firstFile = System.IO.Path.Combine(folder, firstFile);
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.FileExported,
+                        Title = $"{format} Export",
+                        Subtitle = count == 1 ? System.IO.Path.GetFileName(firstFile ?? "file") : $"{count} files exported",
+                        IconGlyph = "\U0001F4C1",
+                        IconColor = ColSuccess,
+                        ToolName = toolName,
+                        FilePath = count == 1 ? firstFile : null,
+                        FilePaths = count > 1 ? files : null,
+                        FolderPath = folder,
+                        Data = data
+                    };
+                }
+
+                case "PrintSheets":
+                {
+                    var files = ExtractFileList(data, "output_files");
+                    string firstFile = files != null && files.Count > 0 ? files[0] : null;
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.FilePrinted,
+                        Title = "PDF Print",
+                        Subtitle = firstFile != null ? System.IO.Path.GetFileName(firstFile) : "Printed",
+                        IconGlyph = "\U0001F5A8",
+                        IconColor = ColSuccess,
+                        ToolName = toolName,
+                        FilePath = firstFile,
+                        FilePaths = files != null && files.Count > 1 ? files : null,
+                        Data = data
+                    };
+                }
+
+                case "SetElementParameter":
+                {
+                    // Skip preview mode
+                    if (data != null && data.TryGetValue("preview", out var prev) && Convert.ToBoolean(prev))
+                        return null;
+
+                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
+                    string newVal = data != null && data.TryGetValue("new_value", out var nv) ? nv?.ToString() : "";
+                    string elemName = data != null && data.TryGetValue("element_name", out var en) ? en?.ToString() : "";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ParameterSet,
+                        Title = $"{paramName} \u2192 {newVal}",
+                        Subtitle = elemName,
+                        IconGlyph = "\u270F",
+                        IconColor = ColWarning,
+                        ToolName = toolName,
+                        Data = data
+                    };
+                }
+
+                case "CreateProjectParameter":
+                {
+                    string paramName = data != null && data.TryGetValue("parameter_name", out var pn) ? pn?.ToString() : "Parameter";
+                    string paramType = data != null && data.TryGetValue("parameter_type", out var pt) ? pt?.ToString() : "";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.ParameterCreated,
+                        Title = paramName,
+                        Subtitle = $"Created \u2022 {paramType}",
+                        IconGlyph = "\u270F",
+                        IconColor = ColWarning,
+                        ToolName = toolName,
+                        Data = data
+                    };
+                }
+
+                case "SearchElements":
+                case "GetModelOverview":
+                case "GetParameterValues":
+                case "GetSelection":
+                case "ListSheets":
+                case "ListViews":
+                case "GetWarnings":
+                case "GetViewsOnSheet":
+                {
+                    string summary = result.Message;
+                    if (summary != null && summary.Length > 60)
+                        summary = summary.Substring(0, 60) + "...";
+
+                    return new OutputRecord
+                    {
+                        RecordType = OutputRecordType.QueryResult,
+                        Title = toolName.StartsWith("Get") || toolName.StartsWith("List") || toolName.StartsWith("Search")
+                            ? toolName.Replace("Get", "").Replace("List", "").Replace("Search", "Find ")
+                            : toolName,
+                        Subtitle = summary ?? "Completed",
+                        IconGlyph = "\U0001F50D",
+                        IconColor = ColPrimary,
+                        ToolName = toolName,
+                        Data = data
+                    };
+                }
+
+                default:
+                    return null;
+            }
+        }
+
+        private void ShowOutputPanel()
+        {
+            if (OutputColumnDef.Width.Value > 0) return; // already visible
+
+            OutputColumnDef.Width = new GridLength(350);
+            OutputSplitter.Visibility = Visibility.Visible;
+            OutputPanel.Visibility = Visibility.Visible;
+
+            BuildOutputPanelUI();
+
+            if (ActualWidth < 1000) Width = 1300;
+        }
+
+        private void CollapseOutputPanel()
+        {
+            OutputColumnDef.Width = new GridLength(0);
+            OutputSplitter.Visibility = Visibility.Collapsed;
+            OutputPanel.Visibility = Visibility.Collapsed;
+            _outputCardsContainer = null;
+        }
+
+        private void BuildOutputPanelUI()
+        {
+            OutputContainer.Children.Clear();
+
+            // ── Section Header ──
+            var headerRow = new Grid();
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var header = new TextBlock
+            {
+                Text = "OUTPUT PREVIEW",
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColSuccess),
+                Margin = new Thickness(4, 4, 0, 10),
+                FontFamily = MainFont,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(header, 0);
+            headerRow.Children.Add(header);
+
+            // Collapse button
+            var collapseBtn = new TextBlock
+            {
+                Text = "\u2715",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(ColMuted),
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 4, 4, 10)
+            };
+            collapseBtn.MouseLeftButtonDown += (s, e) => CollapseOutputPanel();
+            Grid.SetColumn(collapseBtn, 1);
+            headerRow.Children.Add(collapseBtn);
+
+            OutputContainer.Children.Add(headerRow);
+
+            // ── Cards Container ──
+            _outputCardsContainer = new StackPanel();
+            OutputContainer.Children.Add(_outputCardsContainer);
+
+            RebuildOutputCards();
+        }
+
+        private void RebuildOutputCards()
+        {
+            if (_outputCardsContainer == null)
+            {
+                BuildOutputPanelUI();
+                return;
+            }
+
+            _outputCardsContainer.Children.Clear();
+
+            foreach (var record in _outputRecords)
+            {
+                var card = BuildOutputRecordCard(record);
+                _outputCardsContainer.Children.Add(card);
+            }
+
+            // Auto-scroll to bottom
+            OutputScrollViewer?.ScrollToEnd();
+        }
+
+        private FrameworkElement BuildOutputRecordCard(OutputRecord record)
+        {
+            var card = new Border
+            {
+                Background = new SolidColorBrush(ColGlass),
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(ColGlassBorder),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 10, 12, 10),
+                Margin = new Thickness(0, 0, 0, 6)
+            };
+
+            if (record.IsClickable)
+            {
+                card.Cursor = Cursors.Hand;
+                card.MouseEnter += (s, e) =>
+                {
+                    card.BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, ColPrimary.R, ColPrimary.G, ColPrimary.B));
+                    card.Background = new SolidColorBrush(Color.FromArgb(0x18, ColPrimary.R, ColPrimary.G, ColPrimary.B));
+                };
+                card.MouseLeave += (s, e) =>
+                {
+                    card.BorderBrush = new SolidColorBrush(ColGlassBorder);
+                    card.Background = new SolidColorBrush(ColGlass);
+                };
+                card.MouseLeftButtonDown += (s, e) => OnOutputRecordClicked(record);
+            }
+
+            var content = new StackPanel();
+
+            // ── Row 1: Icon + Title + Time ──
+            var headerGrid = new Grid();
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Icon circle
+            var iconCircle = new Border
+            {
+                Width = 18, Height = 18,
+                CornerRadius = new CornerRadius(9),
+                Background = new SolidColorBrush(Color.FromArgb(0x28, record.IconColor.R, record.IconColor.G, record.IconColor.B)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            iconCircle.Child = new TextBlock
+            {
+                Text = record.IconGlyph ?? "?",
+                FontSize = 8, FontFamily = MainFont,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = new SolidColorBrush(record.IconColor)
+            };
+            Grid.SetColumn(iconCircle, 0);
+            headerGrid.Children.Add(iconCircle);
+
+            // Title
+            var titleText = new TextBlock
+            {
+                Text = record.Title ?? "",
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(ColText),
+                FontFamily = MainFont,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            Grid.SetColumn(titleText, 1);
+            headerGrid.Children.Add(titleText);
+
+            // Timestamp
+            var timeText = new TextBlock
+            {
+                Text = record.Timestamp.ToString("HH:mm"),
+                FontSize = 10,
+                Foreground = new SolidColorBrush(ColMuted),
+                FontFamily = MainFont,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(timeText, 2);
+            headerGrid.Children.Add(timeText);
+
+            content.Children.Add(headerGrid);
+
+            // ── Row 2: Subtitle ──
+            if (!string.IsNullOrEmpty(record.Subtitle))
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = record.Subtitle,
+                    FontSize = 11,
+                    Foreground = new SolidColorBrush(ColTextSec),
+                    FontFamily = MainFont,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(22, 3, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxHeight = 36
+                });
+            }
+
+            // ── Row 3: Clickable hint ──
+            if (record.IsClickable)
+            {
+                string hint = record.ViewId.HasValue ? "Click to open in Revit"
+                    : record.FilePath != null ? "Click to open file"
+                    : record.FilePaths != null ? "Click to open folder"
+                    : "";
+
+                if (!string.IsNullOrEmpty(hint))
+                {
+                    content.Children.Add(new TextBlock
+                    {
+                        Text = hint,
+                        FontSize = 9.5,
+                        Foreground = new SolidColorBrush(ColPrimaryLt),
+                        FontFamily = MainFont,
+                        FontStyle = FontStyles.Italic,
+                        Margin = new Thickness(22, 3, 0, 0)
+                    });
+                }
+            }
+
+            card.Child = content;
+            return card;
+        }
+
+        private async void OnOutputRecordClicked(OutputRecord record)
+        {
+            try
+            {
+                if (record.ViewId.HasValue)
+                {
+                    // Navigate to view in Revit via ExternalEvent
+                    var args = new Dictionary<string, object> { ["view_id"] = record.ViewId.Value };
+                    await App.RevitEventHandler.ExecuteToolAsync("ActivateView", args);
+                }
+                else if (record.FilePath != null && System.IO.File.Exists(record.FilePath))
+                {
+                    SysProcess.Start(new ProcessStartInfo(record.FilePath) { UseShellExecute = true });
+                }
+                else if (record.FilePaths != null && record.FilePaths.Count > 0)
+                {
+                    // Open the folder containing the files
+                    string folder = record.FolderPath;
+                    if (string.IsNullOrEmpty(folder) && record.FilePaths.Count > 0)
+                        folder = System.IO.Path.GetDirectoryName(record.FilePaths[0]);
+
+                    if (!string.IsNullOrEmpty(folder) && System.IO.Directory.Exists(folder))
+                        SysProcess.Start("explorer.exe", folder);
+                }
+                else if (!string.IsNullOrEmpty(record.FolderPath) && System.IO.Directory.Exists(record.FolderPath))
+                {
+                    SysProcess.Start("explorer.exe", record.FolderPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Zexus] Output record click error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Safely extracts a List&lt;string&gt; from a result data dictionary value.
+        /// Handles both List&lt;string&gt; and List&lt;object&gt; (type varies between net48/net8.0).
+        /// </summary>
+        private List<string> ExtractFileList(Dictionary<string, object> data, string key)
+        {
+            if (data == null || !data.TryGetValue(key, out var obj) || obj == null)
+                return null;
+
+            if (obj is List<string> strList)
+                return strList;
+
+            if (obj is System.Collections.IEnumerable enumerable)
+            {
+                var result = new List<string>();
+                foreach (var item in enumerable)
+                {
+                    if (item != null)
+                        result.Add(item.ToString());
+                }
+                return result.Count > 0 ? result : null;
+            }
+
+            return null;
+        }
+
+        private long? ConvertToLong(object val)
+        {
+            if (val == null) return null;
+            if (val is long l) return l;
+            if (val is int i) return i;
+            if (long.TryParse(val.ToString(), out long parsed)) return parsed;
+            return null;
         }
 
         #endregion

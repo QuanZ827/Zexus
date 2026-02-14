@@ -95,7 +95,7 @@ namespace Zexus.Tools
                 switch (mode)
                 {
                     case "list":
-                        return ListFields(schedule, definition);
+                        return ListFields(doc, schedule, definition);
                     case "add":
                         if (string.IsNullOrEmpty(fieldName))
                             return ToolResult.Fail("field_name is required for 'add' mode");
@@ -125,7 +125,7 @@ namespace Zexus.Tools
             }
         }
 
-        private ToolResult ListFields(ViewSchedule schedule, ScheduleDefinition definition)
+        private ToolResult ListFields(Document doc, ViewSchedule schedule, ScheduleDefinition definition)
         {
             // Current fields
             var currentFields = new List<Dictionary<string, object>>();
@@ -152,7 +152,7 @@ namespace Zexus.Tools
             var availableFields = new List<Dictionary<string, object>>();
             foreach (var sf in schedulableFields)
             {
-                string sfName = sf.GetName(null);
+                string sfName = sf.GetName(doc);
                 if (!string.IsNullOrEmpty(sfName) && !currentFieldNames.Contains(sfName))
                 {
                     availableFields.Add(new Dictionary<string, object>
@@ -203,7 +203,7 @@ namespace Zexus.Tools
             SchedulableField targetField = null;
             foreach (var sf in schedulableFields)
             {
-                if (string.Equals(sf.GetName(null), fieldName, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(sf.GetName(doc), fieldName, StringComparison.OrdinalIgnoreCase))
                 {
                     targetField = sf;
                     break;
@@ -214,7 +214,7 @@ namespace Zexus.Tools
             {
                 // Collect available names for helpful error
                 var available = schedulableFields
-                    .Select(sf => sf.GetName(null))
+                    .Select(sf => sf.GetName(doc))
                     .Where(n => !string.IsNullOrEmpty(n))
                     .OrderBy(n => n)
                     .Take(30)
