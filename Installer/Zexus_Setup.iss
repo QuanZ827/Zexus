@@ -7,7 +7,7 @@
 ;   2. Run build-installer.bat (or open this file in Inno Setup and click Compile)
 
 #define MyAppName "Zexus for Revit"
-#define MyAppVersion "2.0.1"
+#define MyAppVersion "0.2.0"
 #define MyAppPublisher "Zhequan Zhang"
 #define MyAppURL "https://github.com/QuanZ827/Zexus"
 
@@ -17,7 +17,7 @@
 #define AddinManifest "..\Zexus.addin"
 
 [Setup]
-AppId={{B2C3D4E5-F6A7-8901-BCDE-F12345678901}
+AppId={{BAD31F3B-9E23-425C-A1B1-05E32B856E9E}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}

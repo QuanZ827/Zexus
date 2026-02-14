@@ -121,7 +121,7 @@ echo.
 echo ==========================================
 echo   SUCCESS!
 echo.
-echo   Installer: Installer\Output\Zexus_Setup_v2.0.1.exe
+echo   Installer: Installer\Output\Zexus_Setup_v0.2.0.exe
 echo.
 echo   This single EXE supports Revit 2023-2026.
 echo   Distribute to users as needed.

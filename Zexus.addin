@@ -4,7 +4,7 @@
     <Name>Zexus</Name>
     <Assembly>Zexus\Zexus.dll</Assembly>
     <FullClassName>Zexus.App</FullClassName>
-    <ClientId>B2C3D4E5-F6A7-8901-BCDE-F12345678901</ClientId>
+    <ClientId>BAD31F3B-9E23-425C-A1B1-05E32B856E9E</ClientId>
     <VendorId>ZhequanZhang</VendorId>
     <VendorDescription>Zhequan Zhang</VendorDescription>
   </AddIn>
