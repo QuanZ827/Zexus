@@ -16,13 +16,27 @@ namespace Zexus
     {
         public static ExternalEvent RevitExternalEvent { get; private set; }
         public static RevitEventHandler RevitEventHandler { get; private set; }
-        
+
+        /// <summary>Revit major version (e.g. 2024, 2025, 2026). Set on startup.</summary>
+        public static int RevitVersion { get; private set; }
+
+        /// <summary>True when running on Revit 2025+ (.NET 8, new ElementId API).</summary>
+        public static bool IsRevit2025OrGreater => RevitVersion >= 2025;
+
         private static ChatWindow _chatWindow;
 
         public Result OnStartup(UIControlledApplication application)
         {
             try
             {
+                // Detect Revit version from ControlledApplication.VersionNumber
+                if (int.TryParse(application.ControlledApplication.VersionNumber, out int ver))
+                    RevitVersion = ver;
+                else
+                    RevitVersion = 2024; // safe fallback
+
+                System.Diagnostics.Debug.WriteLine($"[Zexus] Revit version detected: {RevitVersion}");
+
                 // Initialize ExternalEvent handler
                 RevitEventHandler = new RevitEventHandler();
                 RevitExternalEvent = ExternalEvent.Create(RevitEventHandler);

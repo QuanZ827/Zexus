@@ -591,9 +591,12 @@ namespace Zexus.Views
                 Foreground = new SolidColorBrush(ColText),
                 BorderBrush = new SolidColorBrush(ColBorder)
             };
-            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.Anthropic), Tag = LlmProvider.Anthropic });
-            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.OpenAI), Tag = LlmProvider.OpenAI });
-            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.Google), Tag = LlmProvider.Google });
+
+            // ComboBoxItem uses dark foreground for the white dropdown popup
+            var dropdownFg = new SolidColorBrush(Color.FromRgb(0x1a, 0x1a, 0x2e)); // dark text on light popup
+            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.Anthropic), Tag = LlmProvider.Anthropic, Foreground = dropdownFg });
+            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.OpenAI), Tag = LlmProvider.OpenAI, Foreground = dropdownFg });
+            providerCombo.Items.Add(new ComboBoxItem { Content = LlmProviderInfo.GetDisplayName(LlmProvider.Google), Tag = LlmProvider.Google, Foreground = dropdownFg });
 
             // Select current provider
             for (int i = 0; i < providerCombo.Items.Count; i++)

@@ -82,8 +82,8 @@ namespace Zexus.Tools
                         
                         if (includeIds)
                         {
-                            var failingIds = w.GetFailingElements()?.Select(id => id.Value).ToList() ?? new List<long>();
-                            var additionalIds = w.GetAdditionalElements()?.Select(id => id.Value).ToList() ?? new List<long>();
+                            var failingIds = w.GetFailingElements()?.Select(id => RevitCompat.GetIdValue(id)).ToList() ?? new List<long>();
+                            var additionalIds = w.GetAdditionalElements()?.Select(id => RevitCompat.GetIdValue(id)).ToList() ?? new List<long>();
                             
                             detail["failing_element_ids"] = failingIds;
                             detail["additional_element_ids"] = additionalIds;

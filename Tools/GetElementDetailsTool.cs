@@ -95,7 +95,7 @@ namespace Zexus.Tools
                     
                     var detail = new Dictionary<string, object>
                     {
-                        ["id"] = id.Value,
+                        ["id"] = RevitCompat.GetIdValue(id),
                         ["category"] = elem.Category?.Name ?? "(none)",
                         ["name"] = elem.Name
                     };
