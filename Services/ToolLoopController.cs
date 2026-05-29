@@ -765,7 +765,7 @@ namespace Zexus.Services
             // Calculate total character count
             int totalChars = 0;
             foreach (var m in allMessages)
-                totalChars += ((string)m["content"]).Length;
+                totalChars += EstimateContentLength(m["content"]);
 
             if (totalChars <= maxInputChars)
                 return allMessages; // Fits within budget
@@ -775,7 +775,7 @@ namespace Zexus.Services
 
             // Always keep the first user message for original context
             var firstMsg = allMessages[0];
-            int budget = maxInputChars - ((string)firstMsg["content"]).Length;
+            int budget = maxInputChars - EstimateContentLength(firstMsg["content"]);
             result.Add(firstMsg);
 
             // Add a context-trimmed notice
@@ -795,7 +795,7 @@ namespace Zexus.Services
             var recentMessages = new List<Dictionary<string, object>>();
             for (int i = allMessages.Count - 1; i >= 1; i--)
             {
-                int msgLen = ((string)allMessages[i]["content"]).Length;
+                int msgLen = EstimateContentLength(allMessages[i]["content"]);
                 if (budget - msgLen < 0) break;
                 budget -= msgLen;
                 recentMessages.Insert(0, allMessages[i]);
@@ -805,6 +805,31 @@ namespace Zexus.Services
 
             ZexusLogger.Info($"BuildApiMessages: trimmed {allMessages.Count} messages to {result.Count} (saved ~{(totalChars - maxInputChars) / charsPerToken} tokens)");
             return result;
+        }
+
+        /// <summary>
+        /// Estimate the character length of a message's content for the sliding-window
+        /// budget. Handles both plain-text strings and the multimodal content-block array
+        /// (List&lt;object&gt; of {type:image/text,...} dicts) without crashing on the
+        /// cast that used to assume string-only.
+        /// </summary>
+        private static int EstimateContentLength(object content)
+        {
+            if (content is string s) return s.Length;
+            if (content is List<object> blocks)
+            {
+                int total = 0;
+                foreach (var b in blocks)
+                {
+                    if (b is Dictionary<string, object> block)
+                    {
+                        if (block.TryGetValue("text", out var t) && t is string ts) total += ts.Length;
+                        else if (block.TryGetValue("data", out var d) && d is string ds) total += ds.Length;
+                    }
+                }
+                return total;
+            }
+            return 0;
         }
 
         // ═══════════════════════════════════════════════════════

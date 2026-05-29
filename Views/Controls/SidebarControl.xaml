@@ -1,0 +1,87 @@
+<UserControl x:Class="Zexus.Views.Controls.SidebarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="56">
+
+    <UserControl.Resources>
+        <Style x:Key="SidebarIconButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9AA0A6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#10FFFFFF"/>
+                                <Setter Property="Foreground" Value="#E8EAED"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{DynamicResource SurfaceContainerLowBrush}"
+            BorderBrush="{DynamicResource GlassBorderBrush}"
+            BorderThickness="0,0,1,0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- TOP: New Chat -->
+            <StackPanel Grid.Row="0" Margin="0,10,0,0">
+                <Button x:Name="NewChatBtn" Command="{Binding NewChatCommand}"
+                        Style="{StaticResource SidebarIconButton}"
+                        ToolTip="New conversation"
+                        Content="&#xE710;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+
+                <Border Height="1" Width="32" Background="#0DFFFFFF" Margin="0,6,0,4"/>
+            </StackPanel>
+
+            <!-- BOTTOM: settings / theme / pin / export -->
+            <StackPanel Grid.Row="2" Margin="0,0,0,10">
+                <Border Height="1" Width="32" Background="#0DFFFFFF" Margin="0,4,0,6"/>
+
+                <Button x:Name="ExportBtn" Command="{Binding ExportCommand}"
+                        Style="{StaticResource SidebarIconButton}"
+                        ToolTip="Export session report"
+                        Content="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+
+                <Button x:Name="ThemeBtn" Command="{Binding ThemeCommand}"
+                        Style="{StaticResource SidebarIconButton}"
+                        ToolTip="Toggle Light/Dark mode">
+                    <Button.Content>
+                        <TextBlock x:Name="ThemeIcon" Text="☀" FontSize="14"/>
+                    </Button.Content>
+                </Button>
+
+                <Button x:Name="PinBtn" Command="{Binding PinCommand}"
+                        Style="{StaticResource SidebarIconButton}"
+                        ToolTip="Pin on top"
+                        Content="&#xE718;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+
+                <Button x:Name="SettingsBtn" Command="{Binding SettingsCommand}"
+                        Style="{StaticResource SidebarIconButton}"
+                        ToolTip="Settings / API Key"
+                        Content="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
