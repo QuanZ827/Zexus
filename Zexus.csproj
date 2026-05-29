@@ -8,7 +8,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>Zexus</AssemblyName>
     <RootNamespace>Zexus</RootNamespace>
-    <Version>0.2.1.0</Version>
+    <Version>0.3.0.0</Version>
     <Authors>Zhequan Zhang</Authors>
     <Description>Pure ExecuteCode AI Agent for Revit — Testing Only</Description>
   </PropertyGroup>
@@ -48,12 +48,18 @@
   <!-- System.Text.Json and AsyncInterfaces: only needed for net48 (built-in for net8.0) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="System.Text.Json" Version="6.0.10" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="7.0.0" />
   </ItemGroup>
 
   <!-- Roslyn: for dynamic C# code compilation (ExecuteCode tool) -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+  </ItemGroup>
+
+  <!-- CommunityToolkit.Mvvm: ObservableObject + RelayCommand for MVVM (.NET Standard 2.0) -->
+  <!-- Pinned to 8.2.2 — 8.3.x has known issues with net48 source generators -->
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
   </ItemGroup>
 
   <ItemGroup>

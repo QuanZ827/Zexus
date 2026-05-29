@@ -1,0 +1,126 @@
+<UserControl x:Class="Zexus.Views.Controls.TitleBarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:Zexus.Views.Converters">
+
+    <UserControl.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+
+        <Style x:Key="TitleBarChromeButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#5F6368"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#1AFFFFFF"/>
+                                <Setter Property="Foreground" Value="#E8EAED"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseChromeButton" BasedOn="{StaticResource TitleBarChromeButton}" TargetType="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#EA4335"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Border x:Name="ChromeBorder" Background="#0AFFFFFF"
+            MouseLeftButtonDown="OnTitleBarDrag">
+        <Grid Margin="18,0,10,0">
+            <!-- LEFT: logo + name + version + doc context -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Image x:Name="LogoImage" Width="20" Height="20" Margin="0,0,10,0"/>
+
+                <TextBlock Text="ZEXUS" FontSize="16" FontWeight="Bold"
+                           Foreground="{DynamicResource OnSurfaceBrush}"
+                           VerticalAlignment="Center"
+                           Typography.Capitals="AllSmallCaps"
+                           FontFamily="{DynamicResource HeadingFont}"/>
+
+                <Border CornerRadius="4" Padding="6,2" Margin="8,0,0,0"
+                        VerticalAlignment="Center"
+                        Background="#0DFFFFFF">
+                    <TextBlock Text="{Binding VersionString}" FontSize="9"
+                               Foreground="{DynamicResource OutlineBrush}"
+                               VerticalAlignment="Center"
+                               FontFamily="{DynamicResource LabelFont}"/>
+                </Border>
+
+                <!-- Vertical separator before doc context (only when a doc is loaded) -->
+                <Border Width="1" Height="16" Background="#1AFFFFFF"
+                        Margin="14,0,12,0" VerticalAlignment="Center"
+                        Visibility="{Binding HasDocument, Converter={StaticResource BoolToVis}}"/>
+
+                <!-- Green status dot before Revit context -->
+                <Border Width="6" Height="6" CornerRadius="3" Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Background="{DynamicResource SuccessBrush}"
+                        Visibility="{Binding HasDocument, Converter={StaticResource BoolToVis}}"/>
+
+                <TextBlock Text="{Binding DocumentName}"
+                           VerticalAlignment="Center" FontSize="11.5"
+                           FontFamily="Google Sans, Segoe UI Variable, Segoe UI, Segoe UI Emoji">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#40FFFFFF"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasDocument}" Value="True">
+                                    <Setter Property="Foreground" Value="#90FFFFFF"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <TextBlock Text="  ·  " Foreground="#20FFFFFF" FontSize="11.5"
+                           Visibility="{Binding HasModelLocation, Converter={StaticResource BoolToVis}}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ModelLocation}"
+                           ToolTip="{Binding ModelLocationTooltip}"
+                           Visibility="{Binding HasModelLocation, Converter={StaticResource BoolToVis}}"
+                           Foreground="#30FFFFFF" FontSize="11.5"
+                           TextTrimming="CharacterEllipsis" MaxWidth="300"
+                           VerticalAlignment="Center"
+                           FontFamily="Google Sans, Segoe UI Variable, Segoe UI, Segoe UI Emoji"/>
+
+                <TextBlock Text="  ·  " Foreground="#20FFFFFF" FontSize="11.5"
+                           Visibility="{Binding HasModelHub, Converter={StaticResource BoolToVis}}"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ModelHub}"
+                           Visibility="{Binding HasModelHub, Converter={StaticResource BoolToVis}}"
+                           Foreground="#30FFFFFF" FontSize="11.5"
+                           VerticalAlignment="Center"
+                           FontFamily="Google Sans, Segoe UI Variable, Segoe UI, Segoe UI Emoji"/>
+            </StackPanel>
+
+            <!-- RIGHT: window chrome -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button Content="&#xE921;" Click="OnMinimize"
+                        Style="{StaticResource TitleBarChromeButton}" Margin="2,0" ToolTip="Minimize"/>
+                <Button x:Name="MaxRestoreBtn" Content="&#xE922;" Click="OnMaximizeRestore"
+                        Style="{StaticResource TitleBarChromeButton}" Margin="2,0" ToolTip="Maximize"/>
+                <Button Content="&#xE8BB;" Click="OnClose"
+                        Style="{StaticResource CloseChromeButton}" Margin="2,0" ToolTip="Close"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
