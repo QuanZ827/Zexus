@@ -246,7 +246,6 @@
                         <RowDefinition Height="44"/>      <!-- Title -->
                         <RowDefinition Height="Auto"/>    <!-- (collapsed DocLabelBar placeholder) -->
                         <RowDefinition Height="*"/>       <!-- Content + Sidebar -->
-                        <RowDefinition Height="Auto"/>    <!-- Selection Inspector -->
                         <RowDefinition Height="Auto"/>    <!-- InputBarControl -->
                     </Grid.RowDefinitions>
 
@@ -277,11 +276,117 @@
                         <Grid Grid.Column="1">
                         <Grid Grid.Column="0">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>   <!-- Selection Inspector card -->
+                                <RowDefinition Height="*"/>      <!-- Chat messages (scroll) -->
+                                <RowDefinition Height="Auto"/>   <!-- Status bar -->
                             </Grid.RowDefinitions>
 
-                            <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="0"
+                            <!-- ═══ SELECTION INSPECTOR CARD (Stitch glass, inline, non-scrolling) ═══ -->
+                            <Border Grid.Row="0" CornerRadius="12" Margin="16,8,16,4" Padding="16"
+                                    Background="{DynamicResource GlassFloatingBrush}"
+                                    BorderBrush="{DynamicResource GlassBorderFloatingBrush}" BorderThickness="1"
+                                    Visibility="{Binding Chat.HasSelection, Converter={StaticResource BoolToVisibility}}">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.1" Color="Black"/>
+                                </Border.Effect>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Icon container -->
+                                    <Border Grid.Column="0" Width="48" Height="48" CornerRadius="10"
+                                            VerticalAlignment="Top" Margin="0,0,14,0"
+                                            Background="{DynamicResource PrimaryTint10Brush}">
+                                        <TextBlock Text="{Binding Chat.ActiveSelection.IconText}"
+                                                   FontSize="20" FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PrimaryContainerBrush}"
+                                                   FontFamily="{DynamicResource HeadingFont}"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1">
+                                        <!-- Header: ACTIVE SELECTION label + Inspector badge -->
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Right" CornerRadius="4" Padding="6,2"
+                                                    Background="{DynamicResource PrimaryTint10Brush}"
+                                                    BorderBrush="{DynamicResource PrimaryTint20Brush}" BorderThickness="1"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="Inspector" FontSize="9"
+                                                           Foreground="{DynamicResource PrimaryContainerBrush}"
+                                                           FontFamily="{DynamicResource LabelFont}"/>
+                                            </Border>
+                                            <TextBlock Text="ACTIVE SELECTION" FontSize="10" FontWeight="Medium"
+                                                       Foreground="{DynamicResource OutlineBrush}"
+                                                       Typography.Capitals="AllSmallCaps" VerticalAlignment="Center"
+                                                       FontFamily="{DynamicResource LabelFont}"/>
+                                        </DockPanel>
+
+                                        <!-- Primary line: family/type (single) or "N elements selected" (multi) -->
+                                        <TextBlock Text="{Binding Chat.ActiveSelection.PrimaryLine}"
+                                                   FontSize="15" FontWeight="SemiBold" Margin="0,4,0,0"
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource OnSurfaceBrush}"
+                                                   FontFamily="{DynamicResource BodyFont}"/>
+
+                                        <!-- Element ID badge (single only) -->
+                                        <Border CornerRadius="3" Padding="5,1" Margin="0,4,0,0"
+                                                HorizontalAlignment="Left"
+                                                Background="{DynamicResource GlassPanelBrush}"
+                                                Visibility="{Binding Chat.IsSingleSelection, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="{Binding Chat.ActiveSelection.ElementIdLabel}"
+                                                       FontSize="11" Foreground="{DynamicResource OutlineBrush}"
+                                                       FontFamily="{DynamicResource MonoFont}"/>
+                                        </Border>
+
+                                        <!-- Properties row (single only): Category / Level / Workset / Mark -->
+                                        <WrapPanel Orientation="Horizontal" Margin="0,10,0,0"
+                                                   Visibility="{Binding Chat.IsSingleSelection, Converter={StaticResource BoolToVisibility}}">
+                                            <!-- Category -->
+                                            <StackPanel Margin="0,0,24,4">
+                                                <TextBlock Text="CATEGORY" FontSize="10" Foreground="{DynamicResource OutlineVariantBrush}"
+                                                           Typography.Capitals="AllSmallCaps" FontFamily="{DynamicResource LabelFont}"/>
+                                                <TextBlock Text="{Binding Chat.ActiveSelection.CategoryName}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource OnSurfaceVariantBrush}" FontFamily="{DynamicResource BodyFont}"/>
+                                            </StackPanel>
+                                            <!-- Level -->
+                                            <StackPanel Margin="0,0,24,4"
+                                                        Visibility="{Binding Chat.ActiveSelection.HasLevel, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="LEVEL" FontSize="10" Foreground="{DynamicResource OutlineVariantBrush}"
+                                                           Typography.Capitals="AllSmallCaps" FontFamily="{DynamicResource LabelFont}"/>
+                                                <TextBlock Text="{Binding Chat.ActiveSelection.LevelName}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource OnSurfaceVariantBrush}" FontFamily="{DynamicResource BodyFont}"/>
+                                            </StackPanel>
+                                            <!-- Workset -->
+                                            <StackPanel Margin="0,0,24,4"
+                                                        Visibility="{Binding Chat.ActiveSelection.HasWorkset, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="WORKSET" FontSize="10" Foreground="{DynamicResource OutlineVariantBrush}"
+                                                           Typography.Capitals="AllSmallCaps" FontFamily="{DynamicResource LabelFont}"/>
+                                                <TextBlock Text="{Binding Chat.ActiveSelection.WorksetName}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource OnSurfaceVariantBrush}" FontFamily="{DynamicResource BodyFont}"/>
+                                            </StackPanel>
+                                            <!-- Mark -->
+                                            <StackPanel Margin="0,0,0,4"
+                                                        Visibility="{Binding Chat.ActiveSelection.HasMark, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="MARK" FontSize="10" Foreground="{DynamicResource OutlineVariantBrush}"
+                                                           Typography.Capitals="AllSmallCaps" FontFamily="{DynamicResource LabelFont}"/>
+                                                <TextBlock Text="{Binding Chat.ActiveSelection.Mark}" FontSize="12" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource OnSurfaceVariantBrush}" FontFamily="{DynamicResource BodyFont}"/>
+                                            </StackPanel>
+                                        </WrapPanel>
+
+                                        <!-- Category breakdown (multi only) -->
+                                        <TextBlock Text="{Binding Chat.ActiveSelection.CategoryBreakdownText}"
+                                                   FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource OnSurfaceVariantBrush}"
+                                                   FontFamily="{DynamicResource BodyFont}"
+                                                   Visibility="{Binding Chat.IsSingleSelection, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="1"
                                           VerticalScrollBarVisibility="Auto" Background="Transparent" Padding="16,10,16,10"
                                           ScrollChanged="ChatScrollViewer_OnScrollChanged">
                                 <StackPanel x:Name="ChatContainer">
@@ -352,7 +457,7 @@
                             </ScrollViewer>
 
                             <!-- Status: blue pulse dot with breathing animation -->
-                            <Border x:Name="StatusBar" Grid.Row="1" Background="#0AFFFFFF" Padding="18,8" Visibility="Collapsed">
+                            <Border x:Name="StatusBar" Grid.Row="2" Background="#0AFFFFFF" Padding="18,8" Visibility="Collapsed">
                                 <StackPanel Orientation="Horizontal">
                                     <Border x:Name="StatusDot" Width="8" Height="8" CornerRadius="4" Background="#4D8EFE" VerticalAlignment="Center" Margin="0,0,10,0"
                                             RenderTransformOrigin="0.5,0.5">
@@ -401,28 +506,11 @@
                         </Grid>
                     </Grid>
 
-                    <!-- SELECTION INSPECTOR (above input bar) -->
-                    <Border x:Name="SelectionInspectorBar" Grid.Row="3"
-                            Background="#06FFFFFF" Padding="18,5" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal">
-                            <Border Width="6" Height="6" CornerRadius="3" VerticalAlignment="Center"
-                                    Margin="0,0,10,0">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#4285F4" Offset="0"/>
-                                        <GradientStop Color="#7B61FF" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
-                            <TextBlock x:Name="SelectionInfoText" Text=""
-                                       Foreground="#50FFFFFF" FontSize="12"
-                                       TextTrimming="CharacterEllipsis"
-                                       FontFamily="Google Sans, Segoe UI Variable, Segoe UI, Segoe UI Emoji"/>
-                        </StackPanel>
-                    </Border>
+                    <!-- Selection Inspector moved into the chat column (Row 0 of the chat grid)
+                         as an inline Stitch card — see SelectionInspectorCard below. -->
 
                     <!-- IMAGE PREVIEW + INPUT BAR (Step 4: extracted to InputBarControl) -->
-                    <controls:InputBarControl Grid.Row="4" DataContext="{Binding Chat}"/>
+                    <controls:InputBarControl Grid.Row="3" DataContext="{Binding Chat}"/>
                 </Grid>
             </Grid>
         </Border>

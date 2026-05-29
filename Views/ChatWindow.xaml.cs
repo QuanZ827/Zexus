@@ -181,10 +181,9 @@ namespace Zexus.Views
             }
             OuterShellBorder.Background = outerGrad;
 
-            // Status bar + Selection inspector surfaces (other surfaces own their theme
-            // via DynamicResource on the sub-controls).
+            // Status bar surface (Selection Inspector card + other surfaces own their theme
+            // via DynamicResource).
             StatusBar.Background = new SolidColorBrush(ThemeManager.GlassPanel);
-            SelectionInspectorBar.Background = new SolidColorBrush(ThemeManager.GlassPanel);
         }
 
         public void UpdateDocumentContext(Autodesk.Revit.DB.Document doc, Services.ModelBriefing briefing = null)
@@ -215,8 +214,9 @@ namespace Zexus.Views
                 // Step 5: Right Panel renders Model Health; pass briefing (null → "no document").
                 windowVm?.RightPanel?.UpdateFromBriefing(briefing);
 
+                // Document closed → clear any lingering selection card.
                 if (doc == null)
-                    SelectionInspectorBar.Visibility = Visibility.Collapsed;
+                    windowVm?.UpdateSelectionInspector(null);
 
                 _agentService.EnsureToolRegistryInitialized();
             });
@@ -231,23 +231,13 @@ namespace Zexus.Views
         }
 
         /// <summary>
-        /// Called from App.OnIdling when the Revit selection changes.
+        /// Called from App.OnIdling when the Revit selection changes. Thin passthrough —
+        /// the inline Selection Inspector card binds to ChatViewModel.ActiveSelection.
         /// </summary>
-        public void UpdateSelectionInspector(string selectionSummary)
+        public void UpdateSelectionInspector(Models.SelectionInfo selectionInfo)
         {
             Dispatcher.Invoke(() =>
-            {
-                if (string.IsNullOrEmpty(selectionSummary))
-                {
-                    SelectionInspectorBar.Visibility = Visibility.Collapsed;
-                    SelectionInfoText.Text = "";
-                }
-                else
-                {
-                    SelectionInfoText.Text = selectionSummary;
-                    SelectionInspectorBar.Visibility = Visibility.Visible;
-                }
-            });
+                (DataContext as ChatWindowViewModel)?.UpdateSelectionInspector(selectionInfo));
         }
 
         private static string TruncatePath(string path, int maxLength)

@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Zexus.Models;
 using Zexus.Services;
 using Zexus.Tools;
 using Zexus.Views;
@@ -286,13 +287,13 @@ namespace Zexus
                     return;
                 }
 
-                var summary = BuildSelectionSummary(doc, selectedIds);
-                _chatWindow.UpdateSelectionInspector(summary);
+                var selectionInfo = BuildSelectionInfo(doc, selectedIds);
+                _chatWindow.UpdateSelectionInspector(selectionInfo);
 
                 // Push selection state to SessionContext for Working Memory injection
                 SessionContext.Instance.CurrentSelectionCount = currentIds.Count;
                 SessionContext.Instance.CurrentSelectionIds = currentIds.ToList();
-                SessionContext.Instance.CurrentSelectionSummary = summary;
+                SessionContext.Instance.CurrentSelectionSummary = selectionInfo?.SummaryLine;
             }
             catch (Exception ex)
             {
@@ -300,27 +301,43 @@ namespace Zexus
             }
         }
 
-        private static string BuildSelectionSummary(Document doc, ICollection<ElementId> selectedIds)
+        /// <summary>
+        /// Build a structured <see cref="SelectionInfo"/> from the current selection.
+        /// Populates per-field properties for the MVVM Selection Inspector card AND a flat
+        /// <see cref="SelectionInfo.SummaryLine"/> (same format as the old string) so
+        /// SessionContext / Working Memory injection is unchanged.
+        /// </summary>
+        private static SelectionInfo BuildSelectionInfo(Document doc, ICollection<ElementId> selectedIds)
         {
             if (selectedIds.Count == 1)
             {
                 var id = selectedIds.First();
+                long idValue = RevitCompat.GetIdValue(id);
                 var elem = doc.GetElement(id);
-                if (elem == null) return $"1 element (Id: {RevitCompat.GetIdValue(id)})";
+                if (elem == null)
+                {
+                    return new SelectionInfo
+                    {
+                        TotalCount = 1,
+                        ElementId = idValue,
+                        SummaryLine = $"1 element (Id: {idValue})"
+                    };
+                }
 
+                var info = new SelectionInfo { TotalCount = 1, ElementId = idValue };
                 var parts = new List<string>();
 
-                var cat = elem.Category?.Name;
-                if (!string.IsNullOrEmpty(cat)) parts.Add(cat);
+                info.CategoryName = elem.Category?.Name;
+                if (!string.IsNullOrEmpty(info.CategoryName)) parts.Add(info.CategoryName);
 
                 if (elem is FamilyInstance fi)
                 {
                     var family = fi.Symbol?.Family?.Name;
                     var type = fi.Symbol?.Name;
                     if (!string.IsNullOrEmpty(family) && !string.IsNullOrEmpty(type))
-                        parts.Add($"{family}: {type}");
+                        info.FamilyAndType = $"{family}: {type}";
                     else if (!string.IsNullOrEmpty(type))
-                        parts.Add(type);
+                        info.FamilyAndType = type;
                 }
                 else
                 {
@@ -328,11 +345,12 @@ namespace Zexus
                     if (typeId != null && typeId != ElementId.InvalidElementId)
                     {
                         var typeName = doc.GetElement(typeId)?.Name;
-                        if (!string.IsNullOrEmpty(typeName)) parts.Add(typeName);
+                        if (!string.IsNullOrEmpty(typeName)) info.FamilyAndType = typeName;
                     }
                 }
+                if (!string.IsNullOrEmpty(info.FamilyAndType)) parts.Add(info.FamilyAndType);
 
-                parts.Add($"Id: {RevitCompat.GetIdValue(id)}");
+                parts.Add($"Id: {idValue}");
 
                 try
                 {
@@ -340,7 +358,7 @@ namespace Zexus
                     if (lvlParam != null && lvlParam.HasValue)
                     {
                         var lvl = doc.GetElement(lvlParam.AsElementId()) as Level;
-                        if (lvl != null) parts.Add(lvl.Name);
+                        if (lvl != null) { info.LevelName = lvl.Name; parts.Add(lvl.Name); }
                     }
                 }
                 catch (Exception ex) { ZexusLogger.Warn($"Selection inspector level lookup: {ex.Message}"); }
@@ -352,7 +370,10 @@ namespace Zexus
                         var wsTable = doc.GetWorksetTable();
                         var ws = wsTable.GetWorkset(elem.WorksetId);
                         if (ws != null && !string.IsNullOrEmpty(ws.Name))
+                        {
+                            info.WorksetName = ws.Name;
                             parts.Add($"WS: {ws.Name}");
+                        }
                     }
                 }
                 catch (Exception ex) { ZexusLogger.Warn($"Selection inspector workset lookup: {ex.Message}"); }
@@ -363,12 +384,13 @@ namespace Zexus
                     if (markParam != null && markParam.HasValue)
                     {
                         var mark = markParam.AsString();
-                        if (!string.IsNullOrEmpty(mark)) parts.Add($"Mark: {mark}");
+                        if (!string.IsNullOrEmpty(mark)) { info.Mark = mark; parts.Add($"Mark: {mark}"); }
                     }
                 }
                 catch (Exception ex) { ZexusLogger.Warn($"Selection inspector mark lookup: {ex.Message}"); }
 
-                return string.Join("  \u00B7  ", parts);
+                info.SummaryLine = string.Join("  \u00B7  ", parts);
+                return info;
             }
             else
             {
@@ -389,7 +411,13 @@ namespace Zexus
                     .Select(kv => $"{kv.Key}({kv.Value})");
 
                 var suffix = byCategory.Count > 5 ? $" +{byCategory.Count - 5} more" : "";
-                return $"{selectedIds.Count} selected  \u2014  {string.Join(", ", catParts)}{suffix}";
+
+                return new SelectionInfo
+                {
+                    TotalCount = selectedIds.Count,
+                    CategoryBreakdown = byCategory,
+                    SummaryLine = $"{selectedIds.Count} selected  \u2014  {string.Join(", ", catParts)}{suffix}"
+                };
             }
         }
 

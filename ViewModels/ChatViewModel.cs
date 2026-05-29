@@ -63,6 +63,24 @@ namespace Zexus.ViewModels
             private set => SetProperty(ref _hasMessages, value);
         }
 
+        // ── Selection Inspector state (driven by App.OnIdling → ChatWindowViewModel) ──
+        private SelectionInfo _activeSelection;
+        public SelectionInfo ActiveSelection
+        {
+            get => _activeSelection;
+            set
+            {
+                if (SetProperty(ref _activeSelection, value))
+                {
+                    OnPropertyChanged(nameof(HasSelection));
+                    OnPropertyChanged(nameof(IsSingleSelection));
+                }
+            }
+        }
+
+        public bool HasSelection => _activeSelection != null;
+        public bool IsSingleSelection => _activeSelection?.IsSingleElement == true;
+
         /// <summary>The streaming agent bubble currently being filled. Null when idle.</summary>
         private MessageViewModel _currentStreamingMessage;
         public MessageViewModel CurrentStreamingMessage => _currentStreamingMessage;

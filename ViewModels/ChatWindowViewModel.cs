@@ -49,5 +49,14 @@ namespace Zexus.ViewModels
         {
             TitleBar.UpdateDocument(docName, modelLocation, modelLocationTooltip, modelHub);
         }
+
+        /// <summary>
+        /// Passthrough from ChatWindow.xaml.cs (App.OnIdling selection poll).
+        /// Selection state lives on ChatViewModel; the inline card binds to it.
+        /// </summary>
+        public void UpdateSelectionInspector(SelectionInfo info)
+        {
+            RunOnUi(() => Chat.ActiveSelection = info);
+        }
     }
 }
