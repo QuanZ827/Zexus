@@ -75,6 +75,8 @@
     <ComponentGroup Id="Revit2022_DLLs" Directory="PluginDir2022">
       <Component Id="DLLPEC2022_Main" Guid="A1B2C3D4-E5F6-7890-A1B2-C3D4E5F61022">
         <File Id="DLL2022_Zexus" Source="..\bin\Release\net48\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2022_CommunityToolkit" Source="..\bin\Release\net48\CommunityToolkit.Mvvm.dll" />
+        <File Id="DLL2022_Annotations" Source="..\bin\Release\net48\System.ComponentModel.Annotations.dll" />
         <File Id="DLL2022_TextJson" Source="..\bin\Release\net48\System.Text.Json.dll" />
         <File Id="DLL2022_BclAsync" Source="..\bin\Release\net48\Microsoft.Bcl.AsyncInterfaces.dll" />
         <File Id="DLL2022_Memory" Source="..\bin\Release\net48\System.Memory.dll" />
@@ -107,6 +109,8 @@
     <ComponentGroup Id="Revit2023_DLLs" Directory="PluginDir2023">
       <Component Id="DLLPEC2023_Main" Guid="A1B2C3D4-E5F6-7890-A1B2-C3D4E5F61023">
         <File Id="DLL2023_Zexus" Source="..\bin\Release\net48\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2023_CommunityToolkit" Source="..\bin\Release\net48\CommunityToolkit.Mvvm.dll" />
+        <File Id="DLL2023_Annotations" Source="..\bin\Release\net48\System.ComponentModel.Annotations.dll" />
         <File Id="DLL2023_TextJson" Source="..\bin\Release\net48\System.Text.Json.dll" />
         <File Id="DLL2023_BclAsync" Source="..\bin\Release\net48\Microsoft.Bcl.AsyncInterfaces.dll" />
         <File Id="DLL2023_Memory" Source="..\bin\Release\net48\System.Memory.dll" />
@@ -139,6 +143,8 @@
     <ComponentGroup Id="Revit2024_DLLs" Directory="PluginDir2024">
       <Component Id="DLLPEC2024_Main" Guid="A1B2C3D4-E5F6-7890-A1B2-C3D4E5F61024">
         <File Id="DLL2024_Zexus" Source="..\bin\Release\net48\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2024_CommunityToolkit" Source="..\bin\Release\net48\CommunityToolkit.Mvvm.dll" />
+        <File Id="DLL2024_Annotations" Source="..\bin\Release\net48\System.ComponentModel.Annotations.dll" />
         <File Id="DLL2024_TextJson" Source="..\bin\Release\net48\System.Text.Json.dll" />
         <File Id="DLL2024_BclAsync" Source="..\bin\Release\net48\Microsoft.Bcl.AsyncInterfaces.dll" />
         <File Id="DLL2024_Memory" Source="..\bin\Release\net48\System.Memory.dll" />
@@ -171,6 +177,7 @@
     <ComponentGroup Id="Revit2025_DLLs" Directory="PluginDir2025">
       <Component Id="DLLPEC2025_Main" Guid="A1B2C3D4-E5F6-7890-A1B2-C3D4E5F61025">
         <File Id="DLL2025_Zexus" Source="..\bin\Release\net8.0-windows\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2025_CommunityToolkit" Source="..\bin\Release\net8.0-windows\CommunityToolkit.Mvvm.dll" />
         <File Id="DLL2025_PEC_Deps" Source="..\bin\Release\net8.0-windows\Zexus.deps.json" />
         <File Id="DLL2025_PEC_Runtime" Source="..\bin\Release\net8.0-windows\Zexus.runtimeconfig.json" />
         <!-- Roslyn (ExecuteCode tool) -->
@@ -193,6 +200,7 @@
     <ComponentGroup Id="Revit2026_DLLs" Directory="PluginDir2026">
       <Component Id="DLLPEC2026_Main" Guid="A1B2C3D4-E5F6-7890-A1B2-C3D4E5F61026">
         <File Id="DLL2026_Zexus" Source="..\bin\Release\net8.0-windows\Zexus.dll" KeyPath="yes" />
+        <File Id="DLL2026_CommunityToolkit" Source="..\bin\Release\net8.0-windows\CommunityToolkit.Mvvm.dll" />
         <File Id="DLL2026_PEC_Deps" Source="..\bin\Release\net8.0-windows\Zexus.deps.json" />
         <File Id="DLL2026_PEC_Runtime" Source="..\bin\Release\net8.0-windows\Zexus.runtimeconfig.json" />
         <!-- Roslyn (ExecuteCode tool) -->
