@@ -11,6 +11,10 @@ Zexus is a Revit add-in that runs entirely inside the Revit process. Describe wh
 - **Guardrails for write operations** — the agent must present a plan and obtain explicit user confirmation before any model-modifying transaction.
 - **Native Revit plugin** — installs as a per-user MSI, registers as a Revit add-in, ships in a Ribbon tab. Supports Revit 2022–2026 (.NET Framework 4.8 + .NET 8).
 
+## External MCP bridge (development)
+
+Zexus includes a development-only, loopback MCP bridge for external coding agents. It keeps Revit API access on Revit's UI thread through `ExternalEvent`, requires a per-session bearer token, and asks the Revit user to confirm model writes by default. See [Revit MCP bridge](docs/revit-mcp-bridge.md) for setup and safety requirements.
+
 ## Quick Start
 
 1. Download `Zexus_Setup_v*.msi` from the [latest release](https://github.com/QuanZ827/zexus/releases).

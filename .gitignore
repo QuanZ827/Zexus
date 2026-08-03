@@ -1,6 +1,8 @@
 # Build output
 bin/
 obj/
+__pycache__/
+*.py[cod]
 
 # Installer output (generated EXE)
 Installer/Output/
