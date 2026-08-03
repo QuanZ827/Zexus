@@ -9,6 +9,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Zexus.Models;
 using Zexus.Services;
+using Zexus.Services.Bridge;
 using Zexus.Tools;
 using Zexus.Views;
 
@@ -28,6 +29,15 @@ namespace Zexus
         /// <summary>True when running on Revit 2025+ (.NET 8, new ElementId API).</summary>
         public static bool IsRevit2025OrGreater => RevitVersion >= 2025;
 
+        private static volatile bool _isDocumentOpen;
+
+        /// <summary>Cached document-open state for the bridge /health endpoint (no UI-thread access).</summary>
+        public static bool IsDocumentOpen
+        {
+            get => _isDocumentOpen;
+            internal set => _isDocumentOpen = value;
+        }
+
         private static ChatWindow _chatWindow;
 
         // Selection Inspector: Idling-based polling
@@ -39,6 +49,8 @@ namespace Zexus
         {
             try
             {
+                AppDomain.CurrentDomain.AssemblyResolve += ResolveZexusDependency;
+
                 // One-shot migration of user data from the previous brand path.
                 // Safe to call every startup — no-ops once new path exists.
                 MigrateUserDataFromPureEC();
@@ -55,8 +67,14 @@ namespace Zexus
                 RevitEventHandler = new RevitEventHandler();
                 RevitExternalEvent = ExternalEvent.Create(RevitEventHandler);
 
+                // Pre-initialize the tool registry so the bridge works before the chat window is opened.
+                RevitEventHandler.SetToolRegistry(Tools.ToolRegistry.CreateDefault());
+
                 // Create Ribbon UI
                 CreateRibbonUI(application);
+
+                // Start the local HTTP bridge (MCP client -> Bridge -> ExternalEvent -> Revit API)
+                BridgeHost.Start();
 
                 // Subscribe to document events
                 application.ControlledApplication.DocumentOpened += OnDocumentOpened;
@@ -87,10 +105,40 @@ namespace Zexus
             }
             catch (Exception ex) { ZexusLogger.Warn($"SessionReporter shutdown save failed: {ex.Message}"); }
 
+            RevitEventHandler?.BeginShutdown();
+            BridgeHost.Stop();
             _chatWindow?.Close();
             RevitExternalEvent?.Dispose();
+            AppDomain.CurrentDomain.AssemblyResolve -= ResolveZexusDependency;
 
             return Result.Succeeded;
+        }
+
+        private static Assembly ResolveZexusDependency(object sender, ResolveEventArgs args)
+        {
+            try
+            {
+                var requested = new AssemblyName(args.Name).Name;
+                var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "System.Text.Json",
+                    "System.Text.Encodings.Web",
+                    "Microsoft.Bcl.AsyncInterfaces",
+                    "System.Memory",
+                    "System.Buffers",
+                    "System.Runtime.CompilerServices.Unsafe",
+                    "System.Threading.Tasks.Extensions"
+                };
+                if (!allowed.Contains(requested)) return null;
+
+                var assemblyDir = Path.GetDirectoryName(typeof(App).Assembly.Location);
+                var candidate = Path.Combine(assemblyDir ?? "", requested + ".dll");
+                return File.Exists(candidate) ? Assembly.LoadFrom(candidate) : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void CreateRibbonUI(UIControlledApplication application)
@@ -122,6 +170,17 @@ namespace Zexus
             buttonData.Image = GetHiResRibbonIcon("Zexus.Resources.icon_32.png", 16);
 
             panel.AddItem(buttonData);
+
+            var bridgeButtonData = new PushButtonData(
+                "ZexusBridgeStatus",
+                "Bridge",
+                assemblyPath,
+                typeof(BridgeStatusCommand).FullName
+            );
+            bridgeButtonData.ToolTip = "Zexus Bridge - local HTTP endpoint for MCP clients (status only)";
+            bridgeButtonData.LargeImage = GetHiResRibbonIcon("Zexus.Resources.icon_96.png", 32);
+            bridgeButtonData.Image = GetHiResRibbonIcon("Zexus.Resources.icon_32.png", 16);
+            panel.AddItem(bridgeButtonData);
         }
 
         /// <summary>
@@ -230,12 +289,14 @@ namespace Zexus
 
         private void OnDocumentOpened(object sender, Autodesk.Revit.DB.Events.DocumentOpenedEventArgs e)
         {
+            IsDocumentOpen = true;
             var briefing = ModelAnalyzer.Analyze(e.Document);
             _chatWindow?.UpdateDocumentContext(e.Document, briefing);
         }
 
         private void OnDocumentClosed(object sender, Autodesk.Revit.DB.Events.DocumentClosedEventArgs e)
         {
+            IsDocumentOpen = false;
             _chatWindow?.UpdateDocumentContext(null);
         }
 
@@ -246,12 +307,19 @@ namespace Zexus
                 return;
             _lastSelectionPollTime = now;
 
+            // Idling runs on Revit's UI thread and is also raised when the add-in is
+            // loaded after a model is already open. Keep the listener-thread-safe
+            // health cache authoritative here rather than relying only on document
+            // lifecycle events (which can be missed at startup and are ambiguous
+            // when one of several open documents closes).
+            var uiApp = sender as UIApplication;
+            IsDocumentOpen = uiApp?.ActiveUIDocument?.Document != null;
+
             if (_chatWindow == null || !_chatWindow.IsLoaded)
                 return;
 
             try
             {
-                var uiApp = sender as UIApplication;
                 var uiDoc = uiApp?.ActiveUIDocument;
                 if (uiDoc == null)
                 {

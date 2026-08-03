@@ -47,8 +47,8 @@
 
   <!-- System.Text.Json and AsyncInterfaces: only needed for net48 (built-in for net8.0) -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
-    <PackageReference Include="System.Text.Json" Version="6.0.10" />
-    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="7.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
   </ItemGroup>
 
   <!-- Roslyn: for dynamic C# code compilation (ExecuteCode tool) -->
@@ -60,6 +60,16 @@
   <!-- Pinned to 8.2.2 — 8.3.x has known issues with net48 source generators -->
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Bridge\ZexusBridgeCore\ZexusBridgeCore.csproj" />
+  </ItemGroup>
+
+  <!-- The bridge core is compiled by its own project and referenced above. -->
+  <ItemGroup>
+    <Compile Remove="Bridge\**\*.cs" />
+    <None Remove="Bridge\**\*" />
   </ItemGroup>
 
   <ItemGroup>

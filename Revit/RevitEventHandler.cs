@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -13,24 +15,47 @@ namespace Zexus
         None,
         ExecuteTool,
         NavigateToView,
-        DeleteElements
+        DeleteElements,
+        BridgeExecute
     }
 
     public class RevitRequest
     {
+        private int _executionState; // 0 = queued, 1 = running, 2 = cancelled before execution
+
         public RevitRequestType Type { get; set; } = RevitRequestType.None;
         public string ToolName { get; set; }
         public object Parameters { get; set; }
         public TaskCompletionSource<object> CompletionSource { get; set; }
+
+        /// <summary>Set for BridgeExecute requests; the record is updated on the UI thread.</summary>
+        public Zexus.Bridge.BridgeRequestRecord BridgeRecord { get; set; }
+
+        public bool TryBeginExecution()
+        {
+            return Interlocked.CompareExchange(ref _executionState, 1, 0) == 0;
+        }
+
+        public bool TryCancelBeforeExecution()
+        {
+            return Interlocked.CompareExchange(ref _executionState, 2, 0) == 0;
+        }
     }
 
+    /// <summary>
+    /// Queue-based external event handler. Every Revit API call is marshalled to the
+    /// Revit UI thread via ExternalEvent; requests are processed in FIFO order.
+    /// Supports both the chat-agent path (TCS + await) and the HTTP bridge path
+    /// (records updated by BridgeRevitRunner).
+    /// </summary>
     public class RevitEventHandler : IExternalEventHandler
     {
-        private RevitRequest _currentRequest;
-        private readonly object _lockObject = new object();
+        private readonly ConcurrentQueue<RevitRequest> _requestQueue = new ConcurrentQueue<RevitRequest>();
         private Tools.ToolRegistry _toolRegistry;
+        private volatile bool _shuttingDown;
 
         private const int TOOL_TIMEOUT_MS = 30000;
+        private const int RAISE_TIMEOUT_MS = 10000;
 
         public bool IsRegistryInitialized => _toolRegistry != null;
         public int ToolCount => _toolRegistry?.Count ?? 0;
@@ -41,7 +66,63 @@ namespace Zexus
             ZexusLogger.Info($"ToolRegistry set with {registry?.Count ?? 0} tools");
         }
 
+        /// <summary>Called from App.OnShutdown. Fails all queued requests fast.</summary>
+        public void BeginShutdown()
+        {
+            _shuttingDown = true;
+
+            while (_requestQueue.TryDequeue(out var request))
+            {
+                FailRequest(request, "Revit is shutting down", errorType: "shutdown");
+            }
+        }
+
+        private static void FailRequest(
+            RevitRequest request,
+            string message,
+            Zexus.Bridge.BridgeRequestStatus bridgeStatus = Zexus.Bridge.BridgeRequestStatus.Cancelled,
+            string errorType = "cancelled")
+        {
+            request.TryCancelBeforeExecution();
+            request.CompletionSource?.TrySetResult(Models.ToolResult.Fail(message));
+            var record = request.BridgeRecord;
+            if (record != null && !record.IsTerminal)
+            {
+                record.Complete(new Zexus.Bridge.BridgeCompletionData
+                {
+                    Status = bridgeStatus,
+                    Message = message,
+                    ErrorType = errorType
+                });
+            }
+        }
+
+        /// <summary>Enqueue a request and ask Revit to process it. Fire-and-forget raise.</summary>
+        public void EnqueueRevitRequest(RevitRequest request)
+        {
+            _requestQueue.Enqueue(request);
+            _ = RaiseBridgeRequestAsync(request);
+        }
+
+        private async Task RaiseBridgeRequestAsync(RevitRequest request)
+        {
+            var raised = await RaiseAsync(RAISE_TIMEOUT_MS);
+            if (!raised && request.TryCancelBeforeExecution())
+            {
+                FailRequest(
+                    request,
+                    "Failed to raise Revit event (Revit busy or shutting down).",
+                    Zexus.Bridge.BridgeRequestStatus.Failed,
+                    "raise");
+            }
+        }
+
         public async Task<object> ExecuteToolAsync(string toolName, object parameters)
+        {
+            return await ExecuteToolAsync(toolName, parameters, TOOL_TIMEOUT_MS);
+        }
+
+        public async Task<object> ExecuteToolAsync(string toolName, object parameters, int timeoutMs)
         {
             ZexusLogger.Info($"ExecuteToolAsync: {toolName}");
 
@@ -65,53 +146,28 @@ namespace Zexus
                 Type = RevitRequestType.ExecuteTool,
                 ToolName = toolName,
                 Parameters = parameters,
-                CompletionSource = new TaskCompletionSource<object>()
+                CompletionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously)
             };
 
-            lock (_lockObject)
+            _requestQueue.Enqueue(request);
+
+            var raised = await RaiseAsync(timeoutMs);
+            if (!raised)
             {
-                _currentRequest = request;
-            }
-
-            // Retry logic: when Revit is still processing a previous heavy operation,
-            // Raise() returns Pending. Retry with exponential backoff.
-            const int maxRetries = 5;
-            int retryDelayMs = 500;
-            ExternalEventRequest raiseResult = ExternalEventRequest.Denied;
-
-            for (int attempt = 0; attempt < maxRetries; attempt++)
-            {
-                raiseResult = App.RevitExternalEvent.Raise();
-                ZexusLogger.Info($"ExternalEvent.Raise() attempt {attempt + 1}: {raiseResult}");
-
-                if (raiseResult == ExternalEventRequest.Accepted)
-                    break;
-
-                if (raiseResult == ExternalEventRequest.Pending && attempt < maxRetries - 1)
-                {
-                    ZexusLogger.Info($"Revit busy (Pending), waiting {retryDelayMs}ms before retry...");
-                    await Task.Delay(retryDelayMs);
-                    retryDelayMs = Math.Min(retryDelayMs * 2, 4000); // cap at 4s
-                    continue;
-                }
-
-                // Denied or final Pending attempt
-                return Models.ToolResult.Fail(
-                    raiseResult == ExternalEventRequest.Pending
-                        ? "Revit is still processing a previous operation. Please wait a moment and try again."
-                        : $"Failed to raise Revit event: {raiseResult}");
+                request.TryCancelBeforeExecution();
+                return Models.ToolResult.Fail("Failed to raise Revit event (Revit busy or shutting down). Please try again.");
             }
 
             try
             {
-                var timeoutTask = Task.Delay(TOOL_TIMEOUT_MS);
-                var completedTask = await Task.WhenAny(request.CompletionSource.Task, timeoutTask);
-
-                if (completedTask == timeoutTask)
+                var completedTask = await Task.WhenAny(request.CompletionSource.Task, Task.Delay(timeoutMs));
+                if (completedTask != request.CompletionSource.Task)
                 {
-                    return Models.ToolResult.Fail($"Tool execution timed out after {TOOL_TIMEOUT_MS / 1000} seconds.");
+                    var cancelled = request.TryCancelBeforeExecution();
+                    return Models.ToolResult.Fail(cancelled
+                        ? $"Tool execution timed out before it started after {timeoutMs / 1000} seconds."
+                        : $"Tool execution timed out after {timeoutMs / 1000} seconds and may still be running in Revit.");
                 }
-
                 return await request.CompletionSource.Task;
             }
             catch (Exception ex)
@@ -120,43 +176,101 @@ namespace Zexus
             }
         }
 
+        /// <summary>
+        /// Raise the external event, retrying on Pending (Revit busy) with backoff.
+        /// Returns false on Denied or timeout.
+        /// </summary>
+        private async Task<bool> RaiseAsync(int timeoutMs)
+        {
+            if (App.RevitExternalEvent == null) return false;
+
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            int delayMs = 300;
+
+            while (DateTime.UtcNow < deadline)
+            {
+                if (_shuttingDown) return false;
+
+                ExternalEventRequest raiseResult;
+                try
+                {
+                    raiseResult = App.RevitExternalEvent.Raise();
+                }
+                catch (Exception ex)
+                {
+                    ZexusLogger.Warn("ExternalEvent.Raise() failed: " + ex.Message);
+                    return false;
+                }
+                if (raiseResult == ExternalEventRequest.Accepted) return true;
+                if (raiseResult == ExternalEventRequest.Denied) return false;
+
+                ZexusLogger.Info("ExternalEvent.Raise() Pending; retrying...");
+                await Task.Delay(Math.Min(delayMs, 2000));
+                delayMs = Math.Min(delayMs * 2, 4000);
+            }
+
+            return false;
+        }
+
         public void Execute(UIApplication app)
         {
             ZexusLogger.Info("ExternalEventHandler.Execute() called");
 
-            RevitRequest request;
-
-            lock (_lockObject)
+            while (_requestQueue.TryDequeue(out var request))
             {
-                request = _currentRequest;
-                _currentRequest = null;
+                try
+                {
+                    ProcessRequest(app, request);
+                }
+                catch (Exception ex)
+                {
+                    ZexusLogger.Error($"Execute exception: {ex.Message}");
+                    FailRequest(
+                        request,
+                        "Execution error: " + ex.Message,
+                        Zexus.Bridge.BridgeRequestStatus.Failed,
+                        "execution");
+                }
+            }
+        }
+
+        private void ProcessRequest(UIApplication app, RevitRequest request)
+        {
+            if (_shuttingDown)
+            {
+                FailRequest(request, "Revit is shutting down", errorType: "shutdown");
+                return;
             }
 
-            if (request == null) return;
+            if (!request.TryBeginExecution()) return;
 
-            try
+            if (_shuttingDown)
             {
-                object result = null;
-
-                if (request.Type == RevitRequestType.ExecuteTool)
-                {
-                    result = ExecuteTool(app, request.ToolName, request.Parameters);
-                }
-                else if (request.Type == RevitRequestType.NavigateToView)
-                {
-                    result = NavigateToView(app, (long)request.Parameters);
-                }
-                else if (request.Type == RevitRequestType.DeleteElements)
-                {
-                    result = DeleteElements(app, (long[])request.Parameters);
-                }
-
-                request.CompletionSource.TrySetResult(result);
+                FailRequest(request, "Revit is shutting down", errorType: "shutdown");
+                return;
             }
-            catch (Exception ex)
+
+            switch (request.Type)
             {
-                ZexusLogger.Error($"Execute exception: {ex.Message}");
-                request.CompletionSource.TrySetResult(Models.ToolResult.Fail($"Execution error: {ex.Message}"));
+                case RevitRequestType.ExecuteTool:
+                    var result = ExecuteTool(app, request.ToolName, request.Parameters);
+                    request.CompletionSource?.TrySetResult(result);
+                    break;
+
+                case RevitRequestType.NavigateToView:
+                    request.CompletionSource?.TrySetResult(NavigateToView(app, (long)request.Parameters));
+                    break;
+
+                case RevitRequestType.DeleteElements:
+                    request.CompletionSource?.TrySetResult(DeleteElements(app, (long[])request.Parameters));
+                    break;
+
+                case RevitRequestType.BridgeExecute:
+                    if (request.BridgeRecord != null)
+                    {
+                        Zexus.Services.Bridge.BridgeRevitRunner.ExecuteOnUiThread(app, request.BridgeRecord, _toolRegistry);
+                    }
+                    break;
             }
         }
 
@@ -185,11 +299,10 @@ namespace Zexus
 
             ZexusLogger.Info($"Document: {document.Title}");
 
-            var paramDict = parameters as System.Collections.Generic.Dictionary<string, object>;
+            var paramDict = parameters as Dictionary<string, object>;
 
             try
             {
-                // Inject UIApplication for tools that need it (e.g., PostCommand)
                 if (tool is Tools.IAppAwareTool appAware)
                     appAware.SetUIApplication(app);
 
@@ -256,25 +369,29 @@ namespace Zexus
             {
                 Type = RevitRequestType.DeleteElements,
                 Parameters = elementIds,
-                CompletionSource = new TaskCompletionSource<object>()
+                CompletionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously)
             };
-            lock (_lockObject) { _currentRequest = request; }
-            var raiseResult = App.RevitExternalEvent.Raise();
-            if (raiseResult != ExternalEventRequest.Accepted) return false;
+            _requestQueue.Enqueue(request);
+            var raised = await RaiseAsync(RAISE_TIMEOUT_MS);
+            if (!raised)
+            {
+                request.TryCancelBeforeExecution();
+                return false;
+            }
             try
             {
-                var timeoutTask = Task.Delay(10000);
-                var completedTask = await Task.WhenAny(request.CompletionSource.Task, timeoutTask);
-                if (completedTask == timeoutTask) return false;
+                var completedTask = await Task.WhenAny(request.CompletionSource.Task, Task.Delay(10000));
+                if (completedTask != request.CompletionSource.Task)
+                {
+                    request.TryCancelBeforeExecution();
+                    return false;
+                }
                 return (await request.CompletionSource.Task) is bool b && b;
             }
             catch { return false; }
         }
 
-        /// <summary>
-        /// Navigate to a view by ElementId — direct Revit API call, no tool registry dependency.
-        /// Used by Output Preview and Transaction Journal click-to-navigate.
-        /// </summary>
+        /// <summary>Navigate to a view by ElementId (direct Revit API call, no tool registry dependency).</summary>
         public async Task<bool> NavigateToViewAsync(long viewIdValue)
         {
             if (App.RevitExternalEvent == null) return false;
@@ -283,29 +400,30 @@ namespace Zexus
             {
                 Type = RevitRequestType.NavigateToView,
                 Parameters = viewIdValue,
-                CompletionSource = new TaskCompletionSource<object>()
+                CompletionSource = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously)
             };
 
-            lock (_lockObject)
+            _requestQueue.Enqueue(request);
+            var raised = await RaiseAsync(RAISE_TIMEOUT_MS);
+            if (!raised)
             {
-                _currentRequest = request;
-            }
-
-            var raiseResult = App.RevitExternalEvent.Raise();
-            if (raiseResult != ExternalEventRequest.Accepted)
+                request.TryCancelBeforeExecution();
                 return false;
+            }
 
             try
             {
-                var timeoutTask = Task.Delay(5000);
-                var completedTask = await Task.WhenAny(request.CompletionSource.Task, timeoutTask);
-                if (completedTask == timeoutTask) return false;
+                var completedTask = await Task.WhenAny(request.CompletionSource.Task, Task.Delay(5000));
+                if (completedTask != request.CompletionSource.Task)
+                {
+                    request.TryCancelBeforeExecution();
+                    return false;
+                }
                 return (await request.CompletionSource.Task) is bool b && b;
             }
             catch { return false; }
         }
 
         public string GetName() => "Zexus Revit Event Handler";
-
     }
 }

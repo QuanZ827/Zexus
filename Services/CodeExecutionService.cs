@@ -59,7 +59,7 @@ public class DynamicScript
         /// Blacklist of assembly name prefixes known to export types that conflict with
         /// BCL/Revit types during Roslyn compilation (e.g. Revizto exports JsonSerializer).
         /// Only these are filtered. Everything else — including Zexus's own NuGet deps — passes through.
-        /// The global:: alias in WrapCode is the primary defense; this is belt-and-suspenders.
+        /// Duplicate versions of real BCL assemblies are handled separately below.
         /// </summary>
         private static readonly string[] _blockedAssemblyPrefixes = new[]
         {
@@ -89,6 +89,15 @@ public class DynamicScript
                 return _cachedReferences;
 
             _cachedReferences = new List<MetadataReference>();
+            var referenceLocations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Revit can host multiple add-ins that load different strong-named versions of
+            // System.Text.Json side-by-side. Passing all of them to Roslyn makes even the
+            // wrapper alias ambiguous (CS0433). Keep the exact assembly that Zexus itself is
+            // bound to and ignore other loaded versions.
+            var preferredJsonAssembly = typeof(global::System.Text.Json.JsonSerializer).Assembly;
+            var preferredJsonName = preferredJsonAssembly.GetName().Name ?? "System.Text.Json";
+            var preferredJsonLocation = preferredJsonAssembly.Location;
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -110,6 +119,20 @@ public class DynamicScript
                     // The global:: alias in WrapCode is the primary defense; this is belt-and-suspenders.
                     var assemblyName = assembly.GetName().Name ?? "";
                     if (IsBlockedAssembly(assemblyName))
+                        continue;
+
+                    if (assemblyName.Equals(preferredJsonName, StringComparison.OrdinalIgnoreCase)
+                        && !location.Equals(preferredJsonLocation, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ZexusLogger.Warn(
+                            $"Skipping conflicting {assembly.GetName().FullName}; " +
+                            $"dynamic compilation uses {preferredJsonAssembly.GetName().FullName}.");
+                        continue;
+                    }
+
+                    // The same physical assembly can be present in more than one load context.
+                    // Roslyn needs only one metadata reference per file.
+                    if (!referenceLocations.Add(location))
                         continue;
 
                     _cachedReferences.Add(MetadataReference.CreateFromFile(location));
